@@ -8,6 +8,8 @@
 
 import React, { useEffect } from "react";
 import { Bone, Activity, SmilePlus, Baby, Sparkles, HeartPulse } from "lucide-react";
+import { SpeedInsights } from "@vercel/speed-insights/next"
+
 
 // --- Quick config (edit these) ---
 const CLINIC = {
