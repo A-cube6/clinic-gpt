@@ -5,25 +5,19 @@
 // Path suggestion: app/page.tsx
 // Styling: Tailwind CSS
 
-
-import React, { useEffect } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Bone, Activity, SmilePlus, Baby, Sparkles, HeartPulse } from "lucide-react";
-import { SpeedInsights } from "@vercel/speed-insights/next"
-
 
 // --- Quick config (edit these) ---
 const CLINIC = {
-  // Paste your Lovable clinic photo URL(s) here if you want to hotlink:
-  // heroImageUrl: "https://...",
-  // bookingImageUrl: "https://...",
   heroImageUrl: "/images/clinic-hero.jpg",
   bookingImageUrl: "/images/clinic-booking.jpg",
 
   name: "Smile & Care Dental Clinic",
   city: "Kalyani, West Bengal",
-  phoneDisplay: "+91 84205 99459",
-  phoneTel: "+91 84205 99459",
-  whatsappNumber: "+918420599459", // digits only (countrycode + number)
+  phoneDisplay: "+91 98XX-XXX-XXX",
+  phoneTel: "+9198XXXXXXXX",
+  whatsappNumber: "9198XXXXXXXX", // digits only (countrycode + number)
 
   addressLines: ["B-9/20 CA, Block B (B9)", "Kalyani, West Bengal 741235", "India"],
   mapQuery: "B-9/20 CA, B 9, B9, Block B, Kalyani, West Bengal 741235, India",
@@ -32,130 +26,21 @@ const CLINIC = {
     { day: "Mon-Sat", time: "10:00 AM – 8:00 PM" },
     { day: "Sunday", time: "By appointment" },
   ],
+
+  // Payments (prototype)
+  // 1) For a real payment flow, add Razorpay order API routes (I’ll guide you) and set NEXT_PUBLIC_RAZORPAY_KEY_ID.
+  // 2) Until then, checkout runs in Demo mode (shows the UI and simulates success).
+  payments: {
+    demoMode: true,
+    currency: "INR" as const,
+  },
 };
 
 const THEME = {
-  // Tailwind-friendly: use these in className strings
   accent: "from-teal-500 to-sky-500",
   accentSolid: "bg-teal-600",
   accentSolidHover: "hover:bg-teal-700",
 };
-
-const SERVICES = [
-  {
-    title: "Dental Implants",
-    desc: "Natural-looking replacement teeth with strong bite support.",
-    tag: "Implants",
-  },
-  {
-    title: "Root Canal (RCT)",
-    desc: "Pain-relief focused treatment to save an infected tooth.",
-    tag: "RCT",
-  },
-  {
-    title: "Braces & Aligners",
-    desc: "Options for teens & adults—clear aligners included.",
-    tag: "Braces",
-  },
-  {
-    title: "Kids Dentistry",
-    desc: "Gentle checkups, fillings, and preventive care for children.",
-    tag: "Kids",
-  },
-  {
-    title: "Cleaning & Gum Care",
-    desc: "Scaling, polishing, and gum health treatments.",
-    tag: "Cleaning",
-  },
-  {
-    title: "Cosmetic Dentistry",
-    desc: "Whitening, veneers, and smile makeovers.",
-    tag: "Cosmetic",
-  },
-];
-
-const PRODUCTS = [
-  {
-    title: "Soft-Bristle Toothbrush",
-    price: "₹149",
-    note: "Gentle on gums, everyday use.",
-  },
-  {
-    title: "Fluoride Toothpaste",
-    price: "₹199",
-    note: "Cavity protection for daily brushing.",
-  },
-  {
-    title: "Dental Floss",
-    price: "₹249",
-    note: "For interdental cleaning.",
-  },
-  {
-    title: "Mouthwash",
-    price: "₹299",
-    note: "Fresh breath and plaque control.",
-  },
-];
-
-// --- Services grid (Lucide icons) ---
-const services = [
-  { icon: Bone, title: "Dental Implants", desc: "Permanent, natural-looking tooth replacements" },
-  { icon: Activity, title: "Root Canal (RCT)", desc: "Painless treatment to save damaged teeth" },
-  { icon: SmilePlus, title: "Braces & Aligners", desc: "Straight teeth with modern orthodontics" },
-  { icon: Baby, title: "Kids Dentistry", desc: "Gentle, fun dental care for children" },
-  { icon: HeartPulse, title: "Cleaning & Gum Care", desc: "Deep cleaning and periodontal treatment" },
-  { icon: Sparkles, title: "Smile Makeovers", desc: "Cosmetic dentistry for a confident smile" },
-];
-
-const ServicesGrid = () => (
-  <section id="services" className="py-16 md:py-20">
-    <div className="container mx-auto max-w-6xl px-4">
-      <div className="text-center mb-12">
-        <h2 className="text-3xl font-heading font-bold text-foreground">Our Services</h2>
-        <p className="text-muted-foreground mt-2">
-          Comprehensive dental care for every member of your family
-        </p>
-      </div>
-      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-        {services.map(({ icon: Icon, title, desc }) => (
-          <div
-            key={title}
-            className="group rounded-2xl bg-card border border-border p-6 shadow-card hover:shadow-elevated transition-shadow cursor-pointer"
-          >
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-secondary group-hover:bg-primary group-hover:text-primary-foreground transition-colors mb-4">
-              <Icon className="h-6 w-6 text-primary group-hover:text-primary-foreground transition-colors" />
-            </div>
-            <h3 className="text-lg font-semibold text-foreground mb-1">{title}</h3>
-            <p className="text-sm text-muted-foreground">{desc}</p>
-          </div>
-        ))}
-      </div>
-    </div>
-  </section>
-);
-
-const FAQS = [
-  {
-    q: "Is RCT painful?",
-    a: "Most patients feel relief after treatment. We use local anaesthesia and comfort-first steps to minimise pain.",
-  },
-  {
-    q: "How much do implants cost?",
-    a: "Implant pricing depends on the case, bone health, and the crown type. We’ll share an estimate after consultation.",
-  },
-  {
-    q: "Do you treat kids?",
-    a: "Yes—our clinic is family-friendly with gentle pediatric dentistry options.",
-  },
-  {
-    q: "How do I book an appointment?",
-    a: "Use the form on this page, WhatsApp us, or call directly. We’ll confirm the slot quickly.",
-  },
-  {
-    q: "What if I have severe pain or swelling?",
-    a: "Please call immediately. Online chat is not for emergencies.",
-  },
-];
 
 function cn(...classes: Array<string | false | undefined | null>) {
   return classes.filter(Boolean).join(" ");
@@ -242,6 +127,8 @@ const BTN = {
   whatsapp: "text-white shadow-sm hover:shadow-md hover:-translate-y-0.5 bg-[#25D366] hover:bg-[#1EBE57]",
   outline:
     "border border-slate-200 bg-white text-slate-800 shadow-sm hover:bg-slate-50 hover:shadow-md hover:-translate-y-0.5",
+  danger:
+    "border border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 shadow-sm hover:shadow-md hover:-translate-y-0.5",
   small: "px-3 py-2 text-xs",
 };
 
@@ -300,14 +187,6 @@ function Card({ children }: { children: React.ReactNode }) {
   );
 }
 
-function MiniIcon({ label }: { label: string }) {
-  return (
-    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-700">
-      <span className="text-xs font-semibold">{label}</span>
-    </div>
-  );
-}
-
 function FAQItem({ q, a }: { q: string; a: string }) {
   return (
     <details className="group rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -328,25 +207,119 @@ function googleMapsDirectionsHref(query: string) {
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
 }
 
-// --- Main page ---
+// --- Services grid (Lucide icons) ---
+const services = [
+  { icon: Bone, title: "Dental Implants", desc: "Permanent, natural-looking tooth replacements" },
+  { icon: Activity, title: "Root Canal (RCT)", desc: "Painless treatment to save damaged teeth" },
+  { icon: SmilePlus, title: "Braces & Aligners", desc: "Straight teeth with modern orthodontics" },
+  { icon: Baby, title: "Kids Dentistry", desc: "Gentle, fun dental care for children" },
+  { icon: HeartPulse, title: "Cleaning & Gum Care", desc: "Deep cleaning and periodontal treatment" },
+  { icon: Sparkles, title: "Smile Makeovers", desc: "Cosmetic dentistry for a confident smile" },
+];
+
+const ServicesGrid = () => (
+  <section id="services" className="py-16 md:py-20">
+    <div className="mx-auto max-w-6xl px-4">
+      <div className="text-center mb-12">
+        <h2 className="text-3xl font-semibold text-slate-900">Our Services</h2>
+        <p className="text-slate-600 mt-2">Comprehensive dental care for every member of your family</p>
+      </div>
+      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        {services.map(({ icon: Icon, title, desc }) => (
+          <div
+            key={title}
+            className="group rounded-2xl bg-white border border-slate-200 p-6 shadow-sm hover:shadow-md transition-all hover:-translate-y-0.5 cursor-pointer"
+          >
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-slate-100 group-hover:bg-teal-600 group-hover:text-white transition-colors mb-4">
+              <Icon className="h-6 w-6 text-teal-700 group-hover:text-white transition-colors" />
+            </div>
+            <h3 className="text-lg font-semibold text-slate-900 mb-1">{title}</h3>
+            <p className="text-sm text-slate-600">{desc}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+);
+
+// --- Products (for cart/checkout) ---
+type Product = {
+  id: string;
+  title: string;
+  priceInr: number;
+  note: string;
+};
+
+const PRODUCTS: Product[] = [
+  { id: "brush_soft", title: "Soft-Bristle Toothbrush", priceInr: 149, note: "Gentle on gums, everyday use." },
+  { id: "paste_fluoride", title: "Fluoride Toothpaste", priceInr: 199, note: "Cavity protection for daily brushing." },
+  { id: "floss", title: "Dental Floss", priceInr: 249, note: "For interdental cleaning." },
+  { id: "mouthwash", title: "Mouthwash", priceInr: 299, note: "Fresh breath and plaque control." },
+];
+
+const FAQS = [
+  {
+    q: "Is RCT painful?",
+    a: "Most patients feel relief after treatment. We use local anaesthesia and comfort-first steps to minimise pain.",
+  },
+  {
+    q: "How much do implants cost?",
+    a: "Implant pricing depends on the case, bone health, and the crown type. We’ll share an estimate after consultation.",
+  },
+  {
+    q: "Do you treat kids?",
+    a: "Yes—our clinic is family-friendly with gentle pediatric dentistry options.",
+  },
+  {
+    q: "How do I book an appointment?",
+    a: "Use the form on this page, WhatsApp us, or call directly. We’ll confirm the slot quickly.",
+  },
+  {
+    q: "What if I have severe pain or swelling?",
+    a: "Please call immediately. Online chat is not for emergencies.",
+  },
+];
+
+// --- Cart / checkout types ---
+type CartItem = {
+  productId: string;
+  qty: number;
+};
+
+type CheckoutForm = {
+  fullName: string;
+  phone: string;
+  address1: string;
+  city: string;
+  pinCode: string;
+};
+
+function formatInr(amount: number) {
+  return `₹${amount}`;
+}
+
+function clampQty(n: number) {
+  if (Number.isNaN(n)) return 1;
+  return Math.max(1, Math.min(99, n));
+}
+
 export default function Page() {
-  // Smooth scrolling for in-page navigation (menu links)
   useEffect(() => {
     const prefersReducedMotion =
       typeof window !== "undefined" &&
       window.matchMedia &&
       window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-    // Apply smooth scrolling at the document level (works with normal #hash links too)
     const root = document.documentElement;
     const prev = root.style.scrollBehavior;
     root.style.scrollBehavior = prefersReducedMotion ? "auto" : "smooth";
 
     // Dev checks (tiny test cases)
     if (process.env.NODE_ENV !== "production") {
-      console.assert(/^\d+$/.test(CLINIC.whatsappNumber), "CLINIC.whatsappNumber should be digits only");
+      console.assert(/^[0-9]+$/.test(CLINIC.whatsappNumber), "CLINIC.whatsappNumber should be digits only");
       console.assert(CLINIC.mapQuery.length > 0, "CLINIC.mapQuery should not be empty");
       console.assert(CLINIC.phoneTel.startsWith("+"), "CLINIC.phoneTel should start with +countrycode");
+      console.assert(PRODUCTS.every((p) => p.priceInr > 0), "All products should have priceInr > 0");
     }
 
     return () => {
@@ -361,18 +334,138 @@ export default function Page() {
       const prefersReducedMotion =
         window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
       el.scrollIntoView({ behavior: prefersReducedMotion ? "auto" : "smooth", block: "start" });
-      // Keep URL hash in sync (nice for sharing links)
       history.replaceState(null, "", `#${id}`);
     }
   };
 
+  // --- Cart state ---
+  const [checkoutOpen, setCheckoutOpen] = useState(false);
+  const [checkoutStep, setCheckoutStep] = useState<"cart" | "details" | "pay" | "success">("cart");
+  const [cart, setCart] = useState<CartItem[]>([]);
+  const [paying, setPaying] = useState(false);
+  const [checkout, setCheckout] = useState<CheckoutForm>({
+    fullName: "",
+    phone: "",
+    address1: "",
+    city: "Kalyani",
+    pinCode: "",
+  });
+
+  const cartCount = useMemo(() => cart.reduce((a, c) => a + c.qty, 0), [cart]);
+
+  const cartLines = useMemo(() => {
+    const byId = new Map(PRODUCTS.map((p) => [p.id, p] as const));
+    return cart
+      .map((ci) => {
+        const p = byId.get(ci.productId);
+        if (!p) return null;
+        return {
+          ...ci,
+          product: p,
+          lineTotal: p.priceInr * ci.qty,
+        };
+      })
+      .filter(Boolean) as Array<CartItem & { product: Product; lineTotal: number }>;
+  }, [cart]);
+
+  const subTotal = useMemo(() => cartLines.reduce((a, l) => a + l.lineTotal, 0), [cartLines]);
+  const shipping = useMemo(() => (subTotal > 499 ? 0 : subTotal > 0 ? 49 : 0), [subTotal]);
+  const grandTotal = useMemo(() => subTotal + shipping, [subTotal, shipping]);
+
+  const addToCart = (productId: string) => {
+    setCart((prev) => {
+      const idx = prev.findIndex((x) => x.productId === productId);
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = { ...next[idx], qty: clampQty(next[idx].qty + 1) };
+        return next;
+      }
+      return [...prev, { productId, qty: 1 }];
+    });
+    setCheckoutOpen(true);
+    setCheckoutStep("cart");
+  };
+
+  const updateQty = (productId: string, qty: number) => {
+    setCart((prev) =>
+      prev
+        .map((x) => (x.productId === productId ? { ...x, qty: clampQty(qty) } : x))
+        .filter((x) => x.qty > 0)
+    );
+  };
+
+  const removeItem = (productId: string) => {
+    setCart((prev) => prev.filter((x) => x.productId !== productId));
+  };
+
+  const resetCheckout = () => {
+    setPaying(false);
+    setCheckoutStep("cart");
+    setCheckoutOpen(false);
+  };
+
+  const openCart = () => {
+    setCheckoutOpen(true);
+    setCheckoutStep("cart");
+  };
+
+  const proceedToDetails = () => {
+    if (cartLines.length === 0) return;
+    setCheckoutStep("details");
+  };
+
+  const proceedToPay = () => {
+    if (!checkout.fullName.trim() || !checkout.phone.trim()) {
+      alert("Please enter name and phone number.");
+      return;
+    }
+    if (!checkout.address1.trim() || !checkout.pinCode.trim()) {
+      alert("Please enter delivery address and PIN code.");
+      return;
+    }
+    setCheckoutStep("pay");
+  };
+
+  const payNow = async () => {
+    if (grandTotal <= 0) return;
+    setPaying(true);
+    try {
+      if (CLINIC.payments.demoMode) {
+        await new Promise((r) => setTimeout(r, 900));
+        setCheckoutStep("success");
+        setCart([]);
+        return;
+      }
+      alert("Enable real payments by adding Razorpay API routes. For now demo mode is ON.");
+    } finally {
+      setPaying(false);
+    }
+  };
+
+  const closeOverlay = () => {
+    setCheckoutOpen(false);
+    setPaying(false);
+  };
+
+  const checkoutTitle =
+    checkoutStep === "cart"
+      ? "Your cart"
+      : checkoutStep === "details"
+      ? "Checkout details"
+      : checkoutStep === "pay"
+      ? "Payment"
+      : "Order placed";
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
-      {/* Header */}
       <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/80 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
           <div className="flex items-center gap-3">
-            <div className={cn("h-10 w-10 rounded-2xl bg-gradient-to-br", THEME.accent)} />
+            <img
+              src="/images/logo.png"
+              alt={`${CLINIC.name} logo`}
+              className="h-25 w-25 rounded-2xl object-contain overflow-hidden scale-[1.25] origin-center"
+            />
             <div>
               <div className="text-sm font-semibold leading-tight">{CLINIC.name}</div>
               <div className="text-xs text-slate-500">{CLINIC.city}</div>
@@ -398,10 +491,25 @@ export default function Page() {
           </nav>
 
           <div className="flex items-center gap-2">
+            <button
+              onClick={openCart}
+              className={cn(BTN.base, BTN.outline, "px-3 py-2 rounded-xl relative")}
+              aria-label="Open cart"
+            >
+              <IconBag className="h-4 w-4" />
+              Cart
+              {cartCount > 0 ? (
+                <span className="ml-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-slate-900 px-1 text-xs font-bold text-white">
+                  {cartCount}
+                </span>
+              ) : null}
+            </button>
+
             <WhatsAppLink className={cn("hidden md:inline-flex", BTN.base, BTN.whatsapp, "px-3 py-2 rounded-xl")}>
               <IconWhatsApp className="h-4 w-4" />
               WhatsApp
             </WhatsAppLink>
+
             <CallLink className={cn(BTN.base, BTN.primary, "px-3 py-2 rounded-xl")}>
               <IconPhone className="h-4 w-4" />
               Call
@@ -459,7 +567,6 @@ export default function Page() {
             </div>
           </div>
 
-          {/* Hero image */}
           <div className="md:pl-6">
             <div className="relative overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
               <div className={cn("absolute inset-0 bg-gradient-to-br opacity-20", THEME.accent)} />
@@ -470,7 +577,9 @@ export default function Page() {
               />
               <div className="pointer-events-none absolute inset-0 ring-1 ring-inset ring-white/20" />
             </div>
-           
+            <div className="mt-3 text-xs text-slate-500">
+              Put a file at <span className="font-semibold">/public/images/clinic-hero.jpg</span>.
+            </div>
           </div>
         </div>
       </section>
@@ -484,7 +593,11 @@ export default function Page() {
                 <div className="text-sm font-semibold">Request a callback</div>
                 <div className="mt-1 text-xs text-slate-500">We’ll confirm on WhatsApp/Call.</div>
               </div>
-              <div className={cn("h-10 w-10 rounded-2xl bg-gradient-to-br", THEME.accent)} />
+              <img
+                src="/images/logo.png"
+                alt={`${CLINIC.name} logo`}
+                className="h-12 w-20 rounded-2xl object-contain overflow-hidden scale-[1.50] origin-center"
+              />
             </div>
 
             <form
@@ -508,18 +621,16 @@ export default function Page() {
               <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                 <input
                   className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-teal-200"
-                  placeholder="Preferred date"
                   type="date"
                 />
                 <input
                   className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-teal-200"
-                  placeholder="Preferred time"
                   type="time"
                 />
               </div>
               <select className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-teal-200">
-                {SERVICES.map((s) => (
-                  <option key={s.tag} value={s.tag}>
+                {services.map((s) => (
+                  <option key={s.title} value={s.title}>
                     {s.title}
                   </option>
                 ))}
@@ -547,7 +658,6 @@ export default function Page() {
         </div>
       </section>
 
-      {/* Services */}
       <ServicesGrid />
 
       {/* Doctors */}
@@ -571,7 +681,11 @@ export default function Page() {
                   </div>
                 </div>
                 <div className="mt-4 flex gap-2">
-                  <a href="#book" onClick={(e) => scrollToId(e, "book")} className={cn(BTN.base, BTN.primary, BTN.small, "flex-1")}>
+                  <a
+                    href="#book"
+                    onClick={(e) => scrollToId(e, "book")}
+                    className={cn(BTN.base, BTN.primary, BTN.small, "flex-1")}
+                  >
                     Consult
                     <IconArrowRight className="h-4 w-4 opacity-90" />
                   </a>
@@ -610,35 +724,48 @@ export default function Page() {
           <SectionHeading
             eyebrow="Merchandise"
             title="Dental essentials, recommended by our clinic"
-            desc="Prototype shop section. Later we can wire this to WooCommerce/Shopify or a simple payment link + order form."
+            desc="Cart + checkout prototype included. Payments are in Demo mode right now."
           />
+
+          <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+            <div className="font-semibold">Prototype notice</div>
+            <div className="mt-1 text-amber-800">
+              Checkout is enabled with a demo payment step so you can review the flow. Next step: wire Razorpay for real
+              transactions.
+            </div>
+          </div>
 
           <div className="mt-10 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {PRODUCTS.map((p) => (
-              <Card key={p.title}>
+              <Card key={p.id}>
                 <div className="h-36 rounded-2xl bg-slate-100" />
                 <div className="mt-4 text-sm font-semibold">{p.title}</div>
                 <div className="mt-1 text-sm text-slate-600">{p.note}</div>
                 <div className="mt-3 flex items-center justify-between">
-                  <div className="text-sm font-semibold">{p.price}</div>
+                  <div className="text-sm font-semibold">{formatInr(p.priceInr)}</div>
                   <button
                     className={cn(BTN.base, BTN.outline, BTN.small, "rounded-xl px-3 py-2")}
-                    onClick={() => alert("Prototype: connect to cart/checkout.")}
+                    onClick={() => addToCart(p.id)}
                   >
                     <IconBag className="h-4 w-4" />
-                    Add to cart
+                    Add
                   </button>
                 </div>
               </Card>
             ))}
           </div>
 
-          <div className="mt-8 rounded-2xl border border-slate-200 bg-slate-50 p-5 text-sm text-slate-700">
-            <div className="font-semibold">Store plan (recommended)</div>
-            <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-600">
-              <li>Phase 1: simple product catalogue + WhatsApp order</li>
-              <li>Phase 2: full checkout with Razorpay (WooCommerce) or Shopify</li>
-            </ul>
+          <div className="mt-8 flex flex-wrap items-center gap-3">
+            <button className={cn(BTN.base, BTN.primary)} onClick={openCart}>
+              <IconBag className="h-5 w-5" />
+              View cart & checkout
+              {cartCount > 0 ? (
+                <span className="ml-1 inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-white/90 px-2 text-xs font-bold text-slate-900">
+                  {cartCount}
+                </span>
+              ) : null}
+            </button>
+            <div className="text-sm text-slate-600">Free shipping above ₹499. Otherwise ₹49.</div>
           </div>
         </div>
       </section>
@@ -695,7 +822,6 @@ export default function Page() {
             </div>
           </div>
 
-          {/* Google Map iframe */}
           <div className="rounded-2xl border border-slate-200 bg-slate-100 p-3 md:p-4">
             <div className="rounded-2xl bg-white p-4">
               <div className="text-sm font-semibold">Find us on Google Maps</div>
@@ -734,16 +860,28 @@ export default function Page() {
         </div>
       </section>
 
-      {/* Floating action buttons + chat placeholder */}
+      {/* Floating buttons */}
       <div className="fixed bottom-5 right-5 z-50 flex flex-col gap-3">
+        <button className={cn(BTN.base, BTN.outline, "rounded-2xl px-4 py-3 shadow-lg")} onClick={openCart}>
+          <IconBag className="h-5 w-5" />
+          Cart
+          {cartCount > 0 ? (
+            <span className="ml-1 inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-slate-900 px-2 text-xs font-bold text-white">
+              {cartCount}
+            </span>
+          ) : null}
+        </button>
+
         <WhatsAppLink className={cn(BTN.base, BTN.whatsapp, "rounded-2xl px-4 py-3 shadow-lg")}>
           <IconWhatsApp className="h-5 w-5" />
           WhatsApp
         </WhatsAppLink>
+
         <CallLink className={cn(BTN.base, BTN.outline, "rounded-2xl px-4 py-3 shadow-lg")}>
           <IconPhone className="h-5 w-5" />
           Call
         </CallLink>
+
         <button
           className={cn(BTN.base, BTN.outline, "rounded-2xl px-4 py-3 shadow-lg")}
           onClick={() => alert("Prototype: embed Crisp/Tawk/Chatbase script here.")}
@@ -752,6 +890,228 @@ export default function Page() {
           Chat
         </button>
       </div>
+
+      {/* Cart + checkout overlay */}
+      {checkoutOpen ? (
+        <div className="fixed inset-0 z-[60]">
+          <button className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" onClick={closeOverlay} />
+
+          <div className="absolute right-0 top-0 h-full w-full max-w-md bg-white shadow-2xl" role="dialog" aria-modal="true">
+            <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+              <div>
+                <div className="text-sm font-semibold">{checkoutTitle}</div>
+                <div className="text-xs text-slate-500">Cart + checkout prototype</div>
+              </div>
+              <button className={cn(BTN.base, BTN.outline, BTN.small)} onClick={closeOverlay}>
+                Close
+              </button>
+            </div>
+
+            <div className="px-5 py-3 text-xs text-slate-600">
+              <span className={cn("font-semibold", checkoutStep === "cart" && "text-slate-900")}>Cart</span>
+              <span className="mx-2">→</span>
+              <span className={cn("font-semibold", checkoutStep === "details" && "text-slate-900")}>Details</span>
+              <span className="mx-2">→</span>
+              <span className={cn("font-semibold", checkoutStep === "pay" && "text-slate-900")}>Pay</span>
+            </div>
+
+            <div className="h-[calc(100%-120px)] overflow-auto px-5 py-4">
+              {checkoutStep === "cart" ? (
+                <div>
+                  {cartLines.length === 0 ? (
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+                      Your cart is empty. Add a product from the Shop section.
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {cartLines.map((l) => (
+                        <div key={l.productId} className="rounded-2xl border border-slate-200 p-4">
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <div className="text-sm font-semibold">{l.product.title}</div>
+                              <div className="mt-1 text-xs text-slate-500">{l.product.note}</div>
+                              <div className="mt-2 text-sm font-semibold">{formatInr(l.product.priceInr)}</div>
+                            </div>
+                            <button className={cn(BTN.base, BTN.danger, BTN.small)} onClick={() => removeItem(l.productId)}>
+                              Remove
+                            </button>
+                          </div>
+
+                          <div className="mt-3 flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <button className={cn(BTN.base, BTN.outline, BTN.small)} onClick={() => updateQty(l.productId, l.qty - 1)}>
+                                −
+                              </button>
+                              <input
+                                value={l.qty}
+                                onChange={(e) => updateQty(l.productId, Number(e.target.value))}
+                                className="h-9 w-14 rounded-xl border border-slate-200 bg-white text-center text-sm"
+                                inputMode="numeric"
+                              />
+                              <button className={cn(BTN.base, BTN.outline, BTN.small)} onClick={() => updateQty(l.productId, l.qty + 1)}>
+                                +
+                              </button>
+                            </div>
+                            <div className="text-sm font-semibold">{formatInr(l.lineTotal)}</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-slate-600">Subtotal</span>
+                      <span className="font-semibold">{formatInr(subTotal)}</span>
+                    </div>
+                    <div className="mt-1 flex justify-between">
+                      <span className="text-slate-600">Shipping</span>
+                      <span className="font-semibold">{shipping === 0 ? "Free" : formatInr(shipping)}</span>
+                    </div>
+                    <div className="mt-3 flex justify-between text-slate-900">
+                      <span className="font-semibold">Total</span>
+                      <span className="font-semibold">{formatInr(grandTotal)}</span>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 flex gap-2">
+                    <button className={cn(BTN.base, BTN.outline, "flex-1")} onClick={() => setCart([])} disabled={cartLines.length === 0}>
+                      Clear
+                    </button>
+                    <button className={cn(BTN.base, BTN.primary, "flex-1")} onClick={proceedToDetails} disabled={cartLines.length === 0}>
+                      Checkout
+                      <IconArrowRight className="h-5 w-5 opacity-90" />
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+
+              {checkoutStep === "details" ? (
+                <div className="space-y-3">
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+                    <div className="font-semibold">Delivery details</div>
+                    <div className="mt-1 text-slate-600">We’ll use this for delivery (prototype).</div>
+                  </div>
+
+                  <input
+                    className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm"
+                    placeholder="Full name"
+                    value={checkout.fullName}
+                    onChange={(e) => setCheckout((s) => ({ ...s, fullName: e.target.value }))}
+                  />
+                  <input
+                    className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm"
+                    placeholder="Phone number"
+                    inputMode="tel"
+                    value={checkout.phone}
+                    onChange={(e) => setCheckout((s) => ({ ...s, phone: e.target.value }))}
+                  />
+                  <input
+                    className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm"
+                    placeholder="Address line"
+                    value={checkout.address1}
+                    onChange={(e) => setCheckout((s) => ({ ...s, address1: e.target.value }))}
+                  />
+                  <div className="grid grid-cols-2 gap-3">
+                    <input
+                      className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm"
+                      placeholder="City"
+                      value={checkout.city}
+                      onChange={(e) => setCheckout((s) => ({ ...s, city: e.target.value }))}
+                    />
+                    <input
+                      className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm"
+                      placeholder="PIN code"
+                      inputMode="numeric"
+                      value={checkout.pinCode}
+                      onChange={(e) => setCheckout((s) => ({ ...s, pinCode: e.target.value }))}
+                    />
+                  </div>
+
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-slate-600">Total</span>
+                      <span className="font-semibold">{formatInr(grandTotal)}</span>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <button className={cn(BTN.base, BTN.outline, "flex-1")} onClick={() => setCheckoutStep("cart")}>
+                      Back
+                    </button>
+                    <button className={cn(BTN.base, BTN.primary, "flex-1")} onClick={proceedToPay}>
+                      Continue
+                      <IconArrowRight className="h-5 w-5 opacity-90" />
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+
+              {checkoutStep === "pay" ? (
+                <div className="space-y-3">
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+                    <div className="font-semibold">Payment</div>
+                    <div className="mt-1 text-slate-600">
+                      Mode: <span className="font-semibold">{CLINIC.payments.demoMode ? "Demo" : "Live"}</span>
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-slate-600">Payable</span>
+                      <span className="font-semibold">{formatInr(grandTotal)}</span>
+                    </div>
+                    <div className="mt-2 text-xs text-slate-500">
+                      Next step: wire Razorpay Checkout so customers can pay by UPI/cards/netbanking.
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <button className={cn(BTN.base, BTN.outline, "flex-1")} onClick={() => setCheckoutStep("details")} disabled={paying}>
+                      Back
+                    </button>
+                    <button className={cn(BTN.base, BTN.primary, "flex-1")} onClick={payNow} disabled={paying}>
+                      {paying ? "Processing..." : `Pay ${formatInr(grandTotal)}`}
+                      <IconArrowRight className="h-5 w-5 opacity-90" />
+                    </button>
+                  </div>
+
+                  <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-900">
+                    Demo mode is ON. For real payments, we’ll add Razorpay server routes and flip demoMode off.
+                  </div>
+                </div>
+              ) : null}
+
+              {checkoutStep === "success" ? (
+                <div className="space-y-3">
+                  <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
+                    <div className="font-semibold">Order placed (demo)</div>
+                    <div className="mt-1 text-emerald-800">
+                      This simulates a successful payment so you can review the checkout flow.
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <button className={cn(BTN.base, BTN.outline, "flex-1")} onClick={resetCheckout}>
+                      Close
+                    </button>
+                    <button
+                      className={cn(BTN.base, BTN.whatsapp, "flex-1")}
+                      onClick={() => {
+                        const msg = `Hi ${CLINIC.name}, I placed an order (demo). Name: ${checkout.fullName}. Phone: ${checkout.phone}.`;
+                        window.open(`https://wa.me/${CLINIC.whatsappNumber}?text=${encodeURIComponent(msg)}`, "_blank");
+                      }}
+                    >
+                      <IconWhatsApp className="h-5 w-5" />
+                      WhatsApp us
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <footer className="border-t border-slate-200 bg-slate-50">
         <div className="mx-auto max-w-6xl px-4 py-10">
@@ -784,9 +1144,7 @@ export default function Page() {
               </div>
             </div>
           </div>
-          <div className="mt-8 text-xs text-slate-500">
-            (c) {new Date().getFullYear()} {CLINIC.name}. All rights reserved.
-          </div>
+          <div className="mt-8 text-xs text-slate-500">(c) {new Date().getFullYear()} {CLINIC.name}. All rights reserved.</div>
         </div>
       </footer>
     </div>
