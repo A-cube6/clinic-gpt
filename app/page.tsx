@@ -34,13 +34,13 @@ const CLINIC = {
     demoMode: true,
     currency: "INR" as const,
   },
-};
+} as const;
 
 const THEME = {
   accent: "from-teal-500 to-sky-500",
   accentSolid: "bg-teal-600",
   accentSolidHover: "hover:bg-teal-700",
-};
+} as const;
 
 function cn(...classes: Array<string | false | undefined | null>) {
   return classes.filter(Boolean).join(" ");
@@ -71,7 +71,6 @@ function IconPhone({ className }: IconProps) {
 }
 
 function IconWhatsApp({ className }: IconProps) {
-  // Neutral chat bubble (swap to a brand icon later if you want)
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={className}>
       <path
@@ -130,7 +129,7 @@ const BTN = {
   danger:
     "border border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 shadow-sm hover:shadow-md hover:-translate-y-0.5",
   small: "px-3 py-2 text-xs",
-};
+} as const;
 
 function WhatsAppLink({ children, className }: { children: React.ReactNode; className?: string }) {
   const href = `https://wa.me/${CLINIC.whatsappNumber}?text=${encodeURIComponent(
@@ -170,9 +169,7 @@ function SectionHeading({
 }) {
   return (
     <div className="mx-auto max-w-3xl text-center">
-      {eyebrow ? (
-        <div className="text-xs font-semibold uppercase tracking-wider text-slate-500">{eyebrow}</div>
-      ) : null}
+      {eyebrow ? <div className="text-xs font-semibold uppercase tracking-wider text-slate-500">{eyebrow}</div> : null}
       <h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900 md:text-3xl">{title}</h2>
       {desc ? <p className="mt-3 text-sm text-slate-600 md:text-base">{desc}</p> : null}
     </div>
@@ -192,7 +189,7 @@ function FAQItem({ q, a }: { q: string; a: string }) {
     <details className="group rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
       <summary className="flex cursor-pointer list-none items-center justify-between gap-4">
         <span className="text-sm font-semibold text-slate-900">{q}</span>
-        <span className="text-slate-500 group-open:rotate-180 transition-transform">▾</span>
+        <span className="text-slate-500 transition-transform group-open:rotate-180">▾</span>
       </summary>
       <p className="mt-3 text-sm text-slate-600">{a}</p>
     </details>
@@ -220,20 +217,20 @@ const services = [
 const ServicesGrid = () => (
   <section id="services" className="py-16 md:py-20">
     <div className="mx-auto max-w-6xl px-4">
-      <div className="text-center mb-12">
+      <div className="mb-12 text-center">
         <h2 className="text-3xl font-semibold text-slate-900">Our Services</h2>
-        <p className="text-slate-600 mt-2">Comprehensive dental care for every member of your family</p>
+        <p className="mt-2 text-slate-600">Comprehensive dental care for every member of your family</p>
       </div>
-      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
         {services.map(({ icon: Icon, title, desc }) => (
           <div
             key={title}
-            className="group rounded-2xl bg-white border border-slate-200 p-6 shadow-sm hover:shadow-md transition-all hover:-translate-y-0.5 cursor-pointer"
+            className="group cursor-pointer rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md"
           >
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-slate-100 group-hover:bg-teal-600 group-hover:text-white transition-colors mb-4">
-              <Icon className="h-6 w-6 text-teal-700 group-hover:text-white transition-colors" />
+            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-slate-100 transition-colors group-hover:bg-teal-600 group-hover:text-white">
+              <Icon className="h-6 w-6 text-teal-700 transition-colors group-hover:text-white" />
             </div>
-            <h3 className="text-lg font-semibold text-slate-900 mb-1">{title}</h3>
+            <h3 className="mb-1 text-lg font-semibold text-slate-900">{title}</h3>
             <p className="text-sm text-slate-600">{desc}</p>
           </div>
         ))}
@@ -320,10 +317,26 @@ export default function Page() {
       console.assert(CLINIC.mapQuery.length > 0, "CLINIC.mapQuery should not be empty");
       console.assert(CLINIC.phoneTel.startsWith("+"), "CLINIC.phoneTel should start with +countrycode");
       console.assert(PRODUCTS.every((p) => p.priceInr > 0), "All products should have priceInr > 0");
+      console.assert(clampQty(-10) === 1, "clampQty should floor at 1");
+      console.assert(clampQty(500) === 99, "clampQty should cap at 99");
+      console.assert(formatInr(123).startsWith("₹"), "formatInr should prefix ₹");
     }
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        // Close any open panels
+        setMobileMenuOpen(false);
+        setFabOpen(false);
+        setCheckoutOpen(false);
+        setPaying(false);
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
 
     return () => {
       root.style.scrollBehavior = prev;
+      window.removeEventListener("keydown", onKeyDown);
     };
   }, []);
 
@@ -343,6 +356,11 @@ export default function Page() {
   const [checkoutStep, setCheckoutStep] = useState<"cart" | "details" | "pay" | "success">("cart");
   const [cart, setCart] = useState<CartItem[]>([]);
   const [paying, setPaying] = useState(false);
+
+  // Mobile UI state
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [fabOpen, setFabOpen] = useState(false);
+
   const [checkout, setCheckout] = useState<CheckoutForm>({
     fullName: "",
     phone: "",
@@ -398,12 +416,6 @@ export default function Page() {
     setCart((prev) => prev.filter((x) => x.productId !== productId));
   };
 
-  const resetCheckout = () => {
-    setPaying(false);
-    setCheckoutStep("cart");
-    setCheckoutOpen(false);
-  };
-
   const openCart = () => {
     setCheckoutOpen(true);
     setCheckoutStep("cart");
@@ -456,16 +468,22 @@ export default function Page() {
       ? "Payment"
       : "Order placed";
 
+  const Logo = ({ className }: { className?: string }) => (
+    <div className={cn("rounded-2xl overflow-hidden bg-white", className)}>
+      <img
+        src="/images/logo.png"
+        alt={`${CLINIC.name} logo`}
+        className="h-full w-full object-contain scale-[1.25] origin-center"
+      />
+    </div>
+  );
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
       <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/80 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
           <div className="flex items-center gap-3">
-            <img
-              src="/images/logo.png"
-              alt={`${CLINIC.name} logo`}
-              className="h-25 w-25 rounded-2xl object-contain overflow-hidden scale-[1.25] origin-center"
-            />
+            <Logo className="h-10 w-10" />
             <div>
               <div className="text-sm font-semibold leading-tight">{CLINIC.name}</div>
               <div className="text-xs text-slate-500">{CLINIC.city}</div>
@@ -491,9 +509,29 @@ export default function Page() {
           </nav>
 
           <div className="flex items-center gap-2">
+            {/* Mobile hamburger */}
+            <button
+              onClick={() => setMobileMenuOpen((s) => !s)}
+              className={cn(BTN.base, BTN.outline, "md:hidden rounded-xl px-3 py-2")}
+              aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
+              aria-expanded={mobileMenuOpen}
+              aria-controls="mobile-menu"
+            >
+              {mobileMenuOpen ? (
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 6l12 12M18 6L6 18" />
+                </svg>
+              ) : (
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+              )}
+              <span className="sr-only">Menu</span>
+            </button>
+
             <button
               onClick={openCart}
-              className={cn(BTN.base, BTN.outline, "px-3 py-2 rounded-xl relative")}
+              className={cn(BTN.base, BTN.outline, "relative rounded-xl px-3 py-2")}
               aria-label="Open cart"
             >
               <IconBag className="h-4 w-4" />
@@ -505,18 +543,81 @@ export default function Page() {
               ) : null}
             </button>
 
-            <WhatsAppLink className={cn("hidden md:inline-flex", BTN.base, BTN.whatsapp, "px-3 py-2 rounded-xl")}>
+            <WhatsAppLink className={cn("hidden md:inline-flex", BTN.base, BTN.whatsapp, "rounded-xl px-3 py-2")}>
               <IconWhatsApp className="h-4 w-4" />
               WhatsApp
             </WhatsAppLink>
 
-            <CallLink className={cn(BTN.base, BTN.primary, "px-3 py-2 rounded-xl")}>
+            <CallLink className={cn(BTN.base, BTN.primary, "rounded-xl px-3 py-2")}>
               <IconPhone className="h-4 w-4" />
               Call
             </CallLink>
           </div>
         </div>
       </header>
+
+      {/* Mobile menu panel */}
+      {mobileMenuOpen ? (
+        <div className="md:hidden">
+          <button
+            className="fixed inset-0 z-40 bg-black/30"
+            aria-label="Close menu overlay"
+            onClick={() => setMobileMenuOpen(false)}
+          />
+          <div
+            id="mobile-menu"
+            className="fixed left-0 right-0 top-[57px] z-50 mx-3 rounded-2xl border border-slate-200 bg-white shadow-xl"
+            role="dialog"
+            aria-modal="true"
+          >
+            <div className="p-3">
+              <div className="grid gap-2">
+                {["services", "doctors", "shop", "reviews", "contact"].map((id) => (
+                  <a
+                    key={id}
+                    href={`#${id}`}
+                    className="rounded-xl px-4 py-3 text-sm font-semibold text-slate-800 hover:bg-slate-50"
+                    onClick={(e) => {
+                      scrollToId(e, id);
+                      setMobileMenuOpen(false);
+                    }}
+                  >
+                    {id.charAt(0).toUpperCase() + id.slice(1)}
+                  </a>
+                ))}
+              </div>
+
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => {
+                    openCart();
+                    setMobileMenuOpen(false);
+                  }}
+                  className={cn(BTN.base, BTN.outline, "w-full rounded-xl px-3 py-2")}
+                >
+                  <IconBag className="h-4 w-4" />
+                  Cart
+                  {cartCount > 0 ? (
+                    <span className="ml-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-slate-900 px-1 text-xs font-bold text-white">
+                      {cartCount}
+                    </span>
+                  ) : null}
+                </button>
+
+                <CallLink className={cn(BTN.base, BTN.primary, "w-full rounded-xl px-3 py-2")}>
+                  <IconPhone className="h-4 w-4" />
+                  Call
+                </CallLink>
+
+                <WhatsAppLink className={cn(BTN.base, BTN.whatsapp, "col-span-2 w-full rounded-xl px-3 py-2")}>
+                  <IconWhatsApp className="h-4 w-4" />
+                  WhatsApp
+                </WhatsAppLink>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {/* Hero */}
       <section className="relative overflow-hidden">
@@ -553,7 +654,7 @@ export default function Page() {
                 <IconPhone className="h-5 w-5" />
                 Call now
               </CallLink>
-              <a href="#book" className={cn(BTN.base, BTN.outline)}>
+              <a href="#book" onClick={(e) => scrollToId(e, "book")} className={cn(BTN.base, BTN.outline)}>
                 <IconCalendar className="h-5 w-5" />
                 Book appointment
               </a>
@@ -570,11 +671,7 @@ export default function Page() {
           <div className="md:pl-6">
             <div className="relative overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
               <div className={cn("absolute inset-0 bg-gradient-to-br opacity-20", THEME.accent)} />
-              <img
-                src={CLINIC.heroImageUrl}
-                alt="Clinic photo"
-                className="h-[420px] w-full object-cover md:h-full"
-              />
+              <img src={CLINIC.heroImageUrl} alt="Clinic photo" className="h-[420px] w-full object-cover md:h-full" />
               <div className="pointer-events-none absolute inset-0 ring-1 ring-inset ring-white/20" />
             </div>
             <div className="mt-3 text-xs text-slate-500">
@@ -593,11 +690,7 @@ export default function Page() {
                 <div className="text-sm font-semibold">Request a callback</div>
                 <div className="mt-1 text-xs text-slate-500">We’ll confirm on WhatsApp/Call.</div>
               </div>
-              <img
-                src="/images/logo.png"
-                alt={`${CLINIC.name} logo`}
-                className="h-12 w-20 rounded-2xl object-contain overflow-hidden scale-[1.50] origin-center"
-              />
+              <Logo className="h-10 w-10" />
             </div>
 
             <form
@@ -861,7 +954,8 @@ export default function Page() {
       </section>
 
       {/* Floating buttons */}
-      <div className="fixed bottom-5 right-5 z-50 flex flex-col gap-3">
+      {/* Desktop: show the full stack */}
+      <div className="fixed bottom-5 right-5 z-50 hidden flex-col gap-3 md:flex">
         <button className={cn(BTN.base, BTN.outline, "rounded-2xl px-4 py-3 shadow-lg")} onClick={openCart}>
           <IconBag className="h-5 w-5" />
           Cart
@@ -891,12 +985,80 @@ export default function Page() {
         </button>
       </div>
 
+      {/* Mobile: single action button that expands */}
+      <div className="fixed bottom-5 right-5 z-50 md:hidden">
+        {fabOpen ? (
+          <>
+            <button className="fixed inset-0 bg-black/20" aria-label="Close quick actions" onClick={() => setFabOpen(false)} />
+            <div className="absolute bottom-16 right-0 w-56 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl">
+              <button
+                className="flex w-full items-center gap-2 px-4 py-3 text-sm font-semibold text-slate-800 hover:bg-slate-50"
+                onClick={() => {
+                  openCart();
+                  setFabOpen(false);
+                }}
+              >
+                <IconBag className="h-4 w-4" />
+                Cart
+                {cartCount > 0 ? (
+                  <span className="ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-slate-900 px-1 text-xs font-bold text-white">
+                    {cartCount}
+                  </span>
+                ) : null}
+              </button>
+
+              <WhatsAppLink className="flex w-full items-center gap-2 px-4 py-3 text-sm font-semibold text-slate-800 hover:bg-slate-50">
+                <IconWhatsApp className="h-4 w-4" />
+                WhatsApp
+              </WhatsAppLink>
+
+              <CallLink className="flex w-full items-center gap-2 px-4 py-3 text-sm font-semibold text-slate-800 hover:bg-slate-50">
+                <IconPhone className="h-4 w-4" />
+                Call
+              </CallLink>
+
+              <button
+                className="flex w-full items-center gap-2 px-4 py-3 text-sm font-semibold text-slate-800 hover:bg-slate-50"
+                onClick={() => {
+                  setFabOpen(false);
+                  alert("Prototype: embed Crisp/Tawk/Chatbase script here.");
+                }}
+              >
+                <IconChat className="h-4 w-4" />
+                Chat
+              </button>
+            </div>
+          </>
+        ) : null}
+
+        <button
+          className={cn(BTN.base, BTN.primary, "h-14 w-14 rounded-2xl p-0 shadow-xl")}
+          aria-label={fabOpen ? "Close actions" : "Open actions"}
+          onClick={() => setFabOpen((s) => !s)}
+        >
+          {fabOpen ? (
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-6 w-6">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 6l12 12M18 6L6 18" />
+            </svg>
+          ) : (
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-6 w-6">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 5v14M5 12h14" />
+            </svg>
+          )}
+        </button>
+      </div>
+
       {/* Cart + checkout overlay */}
       {checkoutOpen ? (
         <div className="fixed inset-0 z-[60]">
           <button className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" onClick={closeOverlay} />
 
-          <div className="absolute right-0 top-0 h-full w-full max-w-md bg-white shadow-2xl" role="dialog" aria-modal="true">
+          <div
+            className="absolute right-0 top-0 h-full w-full max-w-md bg-white shadow-2xl"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Cart and checkout"
+          >
             <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
               <div>
                 <div className="text-sm font-semibold">{checkoutTitle}</div>
@@ -939,7 +1101,10 @@ export default function Page() {
 
                           <div className="mt-3 flex items-center justify-between">
                             <div className="flex items-center gap-2">
-                              <button className={cn(BTN.base, BTN.outline, BTN.small)} onClick={() => updateQty(l.productId, l.qty - 1)}>
+                              <button
+                                className={cn(BTN.base, BTN.outline, BTN.small)}
+                                onClick={() => updateQty(l.productId, l.qty - 1)}
+                              >
                                 −
                               </button>
                               <input
@@ -948,7 +1113,10 @@ export default function Page() {
                                 className="h-9 w-14 rounded-xl border border-slate-200 bg-white text-center text-sm"
                                 inputMode="numeric"
                               />
-                              <button className={cn(BTN.base, BTN.outline, BTN.small)} onClick={() => updateQty(l.productId, l.qty + 1)}>
+                              <button
+                                className={cn(BTN.base, BTN.outline, BTN.small)}
+                                onClick={() => updateQty(l.productId, l.qty + 1)}
+                              >
                                 +
                               </button>
                             </div>
@@ -975,10 +1143,18 @@ export default function Page() {
                   </div>
 
                   <div className="mt-4 flex gap-2">
-                    <button className={cn(BTN.base, BTN.outline, "flex-1")} onClick={() => setCart([])} disabled={cartLines.length === 0}>
+                    <button
+                      className={cn(BTN.base, BTN.outline, "flex-1")}
+                      onClick={() => setCart([])}
+                      disabled={cartLines.length === 0}
+                    >
                       Clear
                     </button>
-                    <button className={cn(BTN.base, BTN.primary, "flex-1")} onClick={proceedToDetails} disabled={cartLines.length === 0}>
+                    <button
+                      className={cn(BTN.base, BTN.primary, "flex-1")}
+                      onClick={proceedToDetails}
+                      disabled={cartLines.length === 0}
+                    >
                       Checkout
                       <IconArrowRight className="h-5 w-5 opacity-90" />
                     </button>
@@ -993,49 +1169,48 @@ export default function Page() {
                     <div className="mt-1 text-slate-600">We’ll use this for delivery (prototype).</div>
                   </div>
 
-                  <input
-                    className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm"
-                    placeholder="Full name"
-                    value={checkout.fullName}
-                    onChange={(e) => setCheckout((s) => ({ ...s, fullName: e.target.value }))}
-                  />
-                  <input
-                    className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm"
-                    placeholder="Phone number"
-                    inputMode="tel"
-                    value={checkout.phone}
-                    onChange={(e) => setCheckout((s) => ({ ...s, phone: e.target.value }))}
-                  />
-                  <input
-                    className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm"
-                    placeholder="Address line"
-                    value={checkout.address1}
-                    onChange={(e) => setCheckout((s) => ({ ...s, address1: e.target.value }))}
-                  />
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid gap-3">
                     <input
-                      className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm"
-                      placeholder="City"
-                      value={checkout.city}
-                      onChange={(e) => setCheckout((s) => ({ ...s, city: e.target.value }))}
+                      value={checkout.fullName}
+                      onChange={(e) => setCheckout((s) => ({ ...s, fullName: e.target.value }))}
+                      className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-teal-200"
+                      placeholder="Full name"
+                      required
                     />
                     <input
-                      className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm"
-                      placeholder="PIN code"
-                      inputMode="numeric"
-                      value={checkout.pinCode}
-                      onChange={(e) => setCheckout((s) => ({ ...s, pinCode: e.target.value }))}
+                      value={checkout.phone}
+                      onChange={(e) => setCheckout((s) => ({ ...s, phone: e.target.value }))}
+                      className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-teal-200"
+                      placeholder="Phone number"
+                      inputMode="tel"
+                      required
                     />
-                  </div>
-
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-slate-600">Total</span>
-                      <span className="font-semibold">{formatInr(grandTotal)}</span>
+                    <input
+                      value={checkout.address1}
+                      onChange={(e) => setCheckout((s) => ({ ...s, address1: e.target.value }))}
+                      className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-teal-200"
+                      placeholder="Address"
+                      required
+                    />
+                    <div className="grid grid-cols-2 gap-3">
+                      <input
+                        value={checkout.city}
+                        onChange={(e) => setCheckout((s) => ({ ...s, city: e.target.value }))}
+                        className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-teal-200"
+                        placeholder="City"
+                      />
+                      <input
+                        value={checkout.pinCode}
+                        onChange={(e) => setCheckout((s) => ({ ...s, pinCode: e.target.value }))}
+                        className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-teal-200"
+                        placeholder="PIN code"
+                        inputMode="numeric"
+                        required
+                      />
                     </div>
                   </div>
 
-                  <div className="flex gap-2">
+                  <div className="mt-4 flex gap-2">
                     <button className={cn(BTN.base, BTN.outline, "flex-1")} onClick={() => setCheckoutStep("cart")}>
                       Back
                     </button>
@@ -1050,34 +1225,52 @@ export default function Page() {
               {checkoutStep === "pay" ? (
                 <div className="space-y-3">
                   <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
-                    <div className="font-semibold">Payment</div>
-                    <div className="mt-1 text-slate-600">
-                      Mode: <span className="font-semibold">{CLINIC.payments.demoMode ? "Demo" : "Live"}</span>
+                    <div className="font-semibold">Order summary</div>
+                    <div className="mt-1 text-slate-600">Demo payment will simulate success.</div>
+                  </div>
+
+                  <div className="rounded-2xl border border-slate-200 p-4 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-slate-600">Subtotal</span>
+                      <span className="font-semibold">{formatInr(subTotal)}</span>
+                    </div>
+                    <div className="mt-1 flex justify-between">
+                      <span className="text-slate-600">Shipping</span>
+                      <span className="font-semibold">{shipping === 0 ? "Free" : formatInr(shipping)}</span>
+                    </div>
+                    <div className="mt-3 flex justify-between text-slate-900">
+                      <span className="font-semibold">Total</span>
+                      <span className="font-semibold">{formatInr(grandTotal)}</span>
                     </div>
                   </div>
 
                   <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-slate-600">Payable</span>
-                      <span className="font-semibold">{formatInr(grandTotal)}</span>
-                    </div>
-                    <div className="mt-2 text-xs text-slate-500">
-                      Next step: wire Razorpay Checkout so customers can pay by UPI/cards/netbanking.
+                    <div className="text-xs font-semibold uppercase tracking-wider text-slate-500">Deliver to</div>
+                    <div className="mt-2 text-slate-700">
+                      <div className="font-semibold">{checkout.fullName || ""}</div>
+                      <div className="text-slate-600">{checkout.phone || ""}</div>
+                      <div className="mt-2 text-slate-600">
+                        {checkout.address1 || ""}, {checkout.city || ""} {checkout.pinCode || ""}
+                      </div>
                     </div>
                   </div>
 
-                  <div className="flex gap-2">
-                    <button className={cn(BTN.base, BTN.outline, "flex-1")} onClick={() => setCheckoutStep("details")} disabled={paying}>
+                  <div className="mt-4 flex gap-2">
+                    <button className={cn(BTN.base, BTN.outline, "flex-1")} onClick={() => setCheckoutStep("details")}>
                       Back
                     </button>
-                    <button className={cn(BTN.base, BTN.primary, "flex-1")} onClick={payNow} disabled={paying}>
-                      {paying ? "Processing..." : `Pay ${formatInr(grandTotal)}`}
+                    <button
+                      className={cn(BTN.base, BTN.primary, "flex-1")}
+                      onClick={payNow}
+                      disabled={paying || grandTotal <= 0}
+                    >
+                      {paying ? "Processing…" : `Pay ${formatInr(grandTotal)}`}
                       <IconArrowRight className="h-5 w-5 opacity-90" />
                     </button>
                   </div>
 
-                  <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-900">
-                    Demo mode is ON. For real payments, we’ll add Razorpay server routes and flip demoMode off.
+                  <div className="text-xs text-slate-500">
+                    Note: This is a prototype. We’ll wire Razorpay later for real payments.
                   </div>
                 </div>
               ) : null}
@@ -1085,27 +1278,20 @@ export default function Page() {
               {checkoutStep === "success" ? (
                 <div className="space-y-3">
                   <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
-                    <div className="font-semibold">Order placed (demo)</div>
-                    <div className="mt-1 text-emerald-800">
-                      This simulates a successful payment so you can review the checkout flow.
-                    </div>
+                    <div className="font-semibold">Payment successful (demo)</div>
+                    <div className="mt-1 text-emerald-800">Your order has been placed. We’ll confirm shortly.</div>
                   </div>
 
-                  <div className="flex gap-2">
-                    <button className={cn(BTN.base, BTN.outline, "flex-1")} onClick={resetCheckout}>
-                      Close
-                    </button>
-                    <button
-                      className={cn(BTN.base, BTN.whatsapp, "flex-1")}
-                      onClick={() => {
-                        const msg = `Hi ${CLINIC.name}, I placed an order (demo). Name: ${checkout.fullName}. Phone: ${checkout.phone}.`;
-                        window.open(`https://wa.me/${CLINIC.whatsappNumber}?text=${encodeURIComponent(msg)}`, "_blank");
-                      }}
-                    >
-                      <IconWhatsApp className="h-5 w-5" />
-                      WhatsApp us
-                    </button>
-                  </div>
+                  <button
+                    className={cn(BTN.base, BTN.primary, "w-full")}
+                    onClick={() => {
+                      setCheckoutStep("cart");
+                      setCheckoutOpen(false);
+                    }}
+                  >
+                    Continue shopping
+                    <IconArrowRight className="h-5 w-5 opacity-90" />
+                  </button>
                 </div>
               ) : null}
             </div>
@@ -1113,38 +1299,18 @@ export default function Page() {
         </div>
       ) : null}
 
-      <footer className="border-t border-slate-200 bg-slate-50">
+      <footer className="border-t border-slate-200 bg-white">
         <div className="mx-auto max-w-6xl px-4 py-10">
-          <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
-            <div>
-              <div className="text-sm font-semibold">{CLINIC.name}</div>
-              <div className="mt-2 text-sm text-slate-600">{CLINIC.city}</div>
-            </div>
-            <div>
-              <div className="text-sm font-semibold">Quick links</div>
-              <div className="mt-2 space-y-1 text-sm text-slate-600">
-                <a href="#services" onClick={(e) => scrollToId(e, "services")} className="block hover:text-slate-900">
-                  Services
-                </a>
-                <a href="#shop" onClick={(e) => scrollToId(e, "shop")} className="block hover:text-slate-900">
-                  Shop
-                </a>
-                <a href="#reviews" onClick={(e) => scrollToId(e, "reviews")} className="block hover:text-slate-900">
-                  Reviews
-                </a>
-                <a href="#contact" onClick={(e) => scrollToId(e, "contact")} className="block hover:text-slate-900">
-                  Contact
-                </a>
+          <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
+            <div className="flex items-center gap-3">
+              <Logo className="h-9 w-9" />
+              <div>
+                <div className="text-sm font-semibold">{CLINIC.name}</div>
+                <div className="text-xs text-slate-500">{CLINIC.city}</div>
               </div>
             </div>
-            <div>
-              <div className="text-sm font-semibold">Disclaimer</div>
-              <div className="mt-2 text-sm text-slate-600">
-                Information on this site is general and not medical advice. For emergencies, call directly.
-              </div>
-            </div>
+            <div className="text-xs text-slate-500">© {new Date().getFullYear()} {CLINIC.name}. All rights reserved.</div>
           </div>
-          <div className="mt-8 text-xs text-slate-500">(c) {new Date().getFullYear()} {CLINIC.name}. All rights reserved.</div>
         </div>
       </footer>
     </div>
