@@ -1,137 +1,92 @@
 "use client";
 
-// Smile & Care Dental Clinic — Prototype
-// Single-file React component you can paste into a Next.js App Router page.
-// Path suggestion: app/page.tsx
-// Styling: Tailwind CSS
+import Image from "next/image";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import {
+  Activity,
+  Baby,
+  Bone,
+  Calendar,
+  ChevronRight,
+  HeartPulse,
+  Menu,
+  Minus,
+  Plus,
+  ShoppingBag,
+  ShoppingCart,
+  SmilePlus,
+  Sparkles,
+  Trash2,
+  X,
+  MessageCircle,
+  Phone,
+} from "lucide-react";
 
-import React, { useEffect, useMemo, useState } from "react";
-import { Bone, Activity, SmilePlus, Baby, Sparkles, HeartPulse } from "lucide-react";
+/**
+ * Smile & Care Dental Clinic — Prototype
+ * Single-file page component.
+ *
+ * This patch focuses on:
+ *  - Cleaner top navigation + "Book" menu item
+ *  - Mobile: hamburger drawer menu
+ *  - Mobile: replace bottom action bar with a single Floating Action Button (FAB)
+ *
+ * No new routes, no new deps, and existing section IDs are preserved.
+ */
 
 // --- Quick config (edit these) ---
 const CLINIC = {
   heroImageUrl: "/images/clinic-hero.jpg",
   bookingImageUrl: "/images/clinic-booking.jpg",
-
+  logoUrl: "/images/logo.png",
   name: "Smile & Care Dental Clinic",
   city: "Kalyani, West Bengal",
   phoneDisplay: "+91 98XX-XXX-XXX",
   phoneTel: "+9198XXXXXXXX",
   whatsappNumber: "9198XXXXXXXX", // digits only (countrycode + number)
-
   addressLines: ["B-9/20 CA, Block B (B9)", "Kalyani, West Bengal 741235", "India"],
   mapQuery: "B-9/20 CA, B 9, B9, Block B, Kalyani, West Bengal 741235, India",
-
   hours: [
     { day: "Mon-Sat", time: "10:00 AM – 8:00 PM" },
     { day: "Sunday", time: "By appointment" },
   ],
-
   // Payments (prototype)
-  // 1) For a real payment flow, add Razorpay order API routes (I’ll guide you) and set NEXT_PUBLIC_RAZORPAY_KEY_ID.
-  // 2) Until then, checkout runs in Demo mode (shows the UI and simulates success).
-  payments: {
-    demoMode: true,
-    currency: "INR" as const,
-  },
+  payments: { demoMode: true, currency: "INR" as const },
 } as const;
 
 const THEME = {
-  accent: "from-teal-500 to-sky-500",
   accentSolid: "bg-teal-600",
   accentSolidHover: "hover:bg-teal-700",
 } as const;
 
-function cn(...classes: Array<string | false | undefined | null>) {
+function cn(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");
 }
 
-// --- Icons (no extra dependencies) ---
-type IconProps = { className?: string };
-
-function IconArrowRight({ className }: IconProps) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={className}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h12" />
-      <path strokeLinecap="round" strokeLinejoin="round" d="M13 6l6 6-6 6" />
-    </svg>
-  );
-}
-
-function IconPhone({ className }: IconProps) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={className}>
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M22 16.92v3a2 2 0 0 1-2.18 2A19.8 19.8 0 0 1 11.19 19a19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.08 4.18 2 2 0 0 1 4.06 2h3a2 2 0 0 1 2 1.72c.12.86.32 1.7.59 2.5a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.58-1.11a2 2 0 0 1 2.11-.45c.8.27 1.64.47 2.5.59A2 2 0 0 1 22 16.92z"
-      />
-    </svg>
-  );
-}
-
-function IconWhatsApp({ className }: IconProps) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={className}>
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M21 11.5a8.5 8.5 0 0 1-12.9 7.3L3 20l1.4-4.8A8.5 8.5 0 1 1 21 11.5z"
-      />
-      <path strokeLinecap="round" strokeLinejoin="round" d="M8.5 10.5c.4 2 2 3.6 4 4" />
-    </svg>
-  );
-}
-
-function IconCalendar({ className }: IconProps) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={className}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M8 2v4M16 2v4" />
-      <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-      <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18" />
-    </svg>
-  );
-}
-
-function IconChat({ className }: IconProps) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={className}>
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"
-      />
-    </svg>
-  );
-}
-
-function IconBag({ className }: IconProps) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={className}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M6 7h12l1 14H5L6 7z" />
-      <path strokeLinecap="round" strokeLinejoin="round" d="M9 7a3 3 0 0 1 6 0" />
-    </svg>
-  );
-}
-
 const BTN = {
-  base:
-    "inline-flex items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold transition-all duration-200 ease-out active:scale-[0.98]",
-  primary: cn(
-    "text-white shadow-sm hover:shadow-md hover:-translate-y-0.5",
-    THEME.accentSolid,
-    THEME.accentSolidHover
-  ),
+  base: "inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition-all duration-200 ease-out active:scale-[0.98]",
+  primary: cn("text-white shadow-sm hover:shadow-md hover:-translate-y-0.5", THEME.accentSolid, THEME.accentSolidHover),
+  outline:
+    "border border-slate-200 bg-white text-slate-900 shadow-sm hover:bg-slate-50 hover:shadow-md hover:-translate-y-0.5",
   // WhatsApp brand green
   whatsapp: "text-white shadow-sm hover:shadow-md hover:-translate-y-0.5 bg-[#25D366] hover:bg-[#1EBE57]",
-  outline:
-    "border border-slate-200 bg-white text-slate-800 shadow-sm hover:bg-slate-50 hover:shadow-md hover:-translate-y-0.5",
-  danger:
-    "border border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 shadow-sm hover:shadow-md hover:-translate-y-0.5",
   small: "px-3 py-2 text-xs",
 } as const;
 
-function WhatsAppLink({ children, className }: { children: React.ReactNode; className?: string }) {
+function googleMapsEmbedSrc(query: string) {
+  return `https://www.google.com/maps?q=${encodeURIComponent(query)}&output=embed`;
+}
+function googleMapsDirectionsHref(query: string) {
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
+}
+
+function WhatsAppLink({
+  children,
+  className,
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
   const href = `https://wa.me/${CLINIC.whatsappNumber}?text=${encodeURIComponent(
     `Hi ${CLINIC.name}, I'd like to book an appointment.`
   )}`;
@@ -141,20 +96,11 @@ function WhatsAppLink({ children, className }: { children: React.ReactNode; clas
     </a>
   );
 }
-
 function CallLink({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
     <a href={`tel:${CLINIC.phoneTel}`} className={className}>
       {children}
     </a>
-  );
-}
-
-function Badge({ children }: { children: React.ReactNode }) {
-  return (
-    <span className="inline-flex items-center rounded-full border border-slate-200 bg-white/70 px-3 py-1 text-xs font-medium text-slate-700 shadow-sm">
-      {children}
-    </span>
   );
 }
 
@@ -168,40 +114,49 @@ function SectionHeading({
   desc?: string;
 }) {
   return (
-    <div className="mx-auto max-w-3xl text-center">
-      {eyebrow ? <div className="text-xs font-semibold uppercase tracking-wider text-slate-500">{eyebrow}</div> : null}
-      <h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900 md:text-3xl">{title}</h2>
-      {desc ? <p className="mt-3 text-sm text-slate-600 md:text-base">{desc}</p> : null}
+    <div className="mx-auto mb-10 max-w-2xl text-center">
+      {eyebrow ? (
+        <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">{eyebrow}</p>
+      ) : null}
+      <h2 className="mt-2 text-3xl font-bold tracking-tight text-slate-900">{title}</h2>
+      {desc ? <p className="mt-2 text-slate-600">{desc}</p> : null}
     </div>
   );
 }
 
 function Card({ children }: { children: React.ReactNode }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-all duration-200 ease-out hover:-translate-y-0.5 hover:shadow-md">
+    <div className="rounded-2xl border border-slate-200 bg-white/80 p-6 shadow-sm backdrop-blur transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
       {children}
     </div>
   );
 }
 
-function FAQItem({ q, a }: { q: string; a: string }) {
+function Badge({ children }: { children: React.ReactNode }) {
   return (
-    <details className="group rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-      <summary className="flex cursor-pointer list-none items-center justify-between gap-4">
-        <span className="text-sm font-semibold text-slate-900">{q}</span>
-        <span className="text-slate-500 transition-transform group-open:rotate-180">▾</span>
-      </summary>
-      <p className="mt-3 text-sm text-slate-600">{a}</p>
-    </details>
+    <span className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1 text-xs text-slate-700 shadow-sm">
+      {children}
+    </span>
   );
 }
 
-function googleMapsEmbedSrc(query: string) {
-  return `https://www.google.com/maps?q=${encodeURIComponent(query)}&output=embed`;
-}
 
-function googleMapsDirectionsHref(query: string) {
-  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
+function FAQItem({ q, a }: { q: string; a: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <button
+      type="button"
+      className="w-full rounded-2xl border border-slate-200 bg-white px-5 py-4 text-left shadow-sm transition hover:bg-slate-50"
+      onClick={() => setOpen((s) => !s)}
+      aria-expanded={open}
+    >
+      <div className="flex items-center justify-between gap-3">
+        <span className="font-semibold text-slate-900">{q}</span>
+        <ChevronRight className={cn("h-5 w-5 text-slate-500 transition", open && "rotate-90")} />
+      </div>
+      {open ? <p className="mt-3 text-sm text-slate-600">{a}</p> : null}
+    </button>
+  );
 }
 
 // --- Services grid (Lucide icons) ---
@@ -216,19 +171,20 @@ const services = [
 
 const ServicesGrid = () => (
   <section id="services" className="py-16 md:py-20">
-    <div className="mx-auto max-w-6xl px-4">
-      <div className="mb-12 text-center">
-        <h2 className="text-3xl font-semibold text-slate-900">Our Services</h2>
-        <p className="mt-2 text-slate-600">Comprehensive dental care for every member of your family</p>
-      </div>
+    <div className="mx-auto w-full max-w-6xl px-4 sm:px-6">
+      <SectionHeading
+        eyebrow="Treatments"
+        title="Our Services"
+        desc="Comprehensive dental care for every member of your family"
+      />
       <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
         {services.map(({ icon: Icon, title, desc }) => (
           <div
             key={title}
-            className="group cursor-pointer rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md"
+            className="group rounded-2xl border border-slate-200 bg-white/80 p-6 shadow-sm backdrop-blur transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
           >
-            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-slate-100 transition-colors group-hover:bg-teal-600 group-hover:text-white">
-              <Icon className="h-6 w-6 text-teal-700 transition-colors group-hover:text-white" />
+            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-slate-100 transition-colors group-hover:bg-teal-600">
+              <Icon className="h-6 w-6 text-teal-600 transition-colors group-hover:text-white" />
             </div>
             <h3 className="mb-1 text-lg font-semibold text-slate-900">{title}</h3>
             <p className="text-sm text-slate-600">{desc}</p>
@@ -240,13 +196,7 @@ const ServicesGrid = () => (
 );
 
 // --- Products (for cart/checkout) ---
-type Product = {
-  id: string;
-  title: string;
-  priceInr: number;
-  note: string;
-};
-
+type Product = { id: string; title: string; priceInr: number; note: string };
 const PRODUCTS: Product[] = [
   { id: "brush_soft", title: "Soft-Bristle Toothbrush", priceInr: 149, note: "Gentle on gums, everyday use." },
   { id: "paste_fluoride", title: "Fluoride Toothpaste", priceInr: 199, note: "Cavity protection for daily brushing." },
@@ -255,58 +205,60 @@ const PRODUCTS: Product[] = [
 ];
 
 const FAQS = [
-  {
-    q: "Is RCT painful?",
-    a: "Most patients feel relief after treatment. We use local anaesthesia and comfort-first steps to minimise pain.",
-  },
-  {
-    q: "How much do implants cost?",
-    a: "Implant pricing depends on the case, bone health, and the crown type. We’ll share an estimate after consultation.",
-  },
-  {
-    q: "Do you treat kids?",
-    a: "Yes—our clinic is family-friendly with gentle pediatric dentistry options.",
-  },
-  {
-    q: "How do I book an appointment?",
-    a: "Use the form on this page, WhatsApp us, or call directly. We’ll confirm the slot quickly.",
-  },
-  {
-    q: "What if I have severe pain or swelling?",
-    a: "Please call immediately. Online chat is not for emergencies.",
-  },
+  { q: "Is RCT painful?", a: "Most patients feel relief after treatment. We use local anaesthesia and comfort-first steps to minimise pain." },
+  { q: "How much do implants cost?", a: "Implant pricing depends on the case, bone health, and the crown type. We’ll share an estimate after consultation." },
+  { q: "Do you treat kids?", a: "Yes—our clinic is family-friendly with gentle pediatric dentistry options." },
+  { q: "How do I book an appointment?", a: "Use the form on this page, WhatsApp us, or call directly. We’ll confirm the slot quickly." },
+  { q: "What if I have severe pain or swelling?", a: "Please call immediately. Online chat is not for emergencies." },
 ];
 
-// --- Cart / checkout types ---
-type CartItem = {
-  productId: string;
-  qty: number;
-};
-
-type CheckoutForm = {
-  fullName: string;
-  phone: string;
-  address1: string;
-  city: string;
-  pinCode: string;
-};
+type CartItem = { productId: string; qty: number };
+type CheckoutForm = { fullName: string; phone: string; address1: string; city: string; pinCode: string };
 
 function formatInr(amount: number) {
   return `₹${amount}`;
 }
-
 function clampQty(n: number) {
   if (Number.isNaN(n)) return 1;
   return Math.max(1, Math.min(99, n));
 }
 
+const NAV_ITEMS = [
+  { id: "services", label: "Services" },
+  { id: "doctors", label: "Doctors" },
+  { id: "shop", label: "Shop" },
+  { id: "reviews", label: "Reviews" },
+  { id: "contact", label: "Contact" },
+  { id: "book", label: "Book" },
+] as const;
+
 export default function Page() {
+  // --- Mobile UI state ---
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [fabOpen, setFabOpen] = useState(false);
+
+  // --- Cart state ---
+  const [checkoutOpen, setCheckoutOpen] = useState(false);
+  const [checkoutStep, setCheckoutStep] = useState<"cart" | "details" | "pay" | "success">("cart");
+  const [cart, setCart] = useState<CartItem[]>([]);
+  const [paying, setPaying] = useState(false);
+  const [checkout, setCheckout] = useState<CheckoutForm>({
+    fullName: "",
+    phone: "",
+    address1: "",
+    city: "Kalyani",
+    pinCode: "",
+  });
+
+  const fabRef = useRef<HTMLDivElement | null>(null);
+
   useEffect(() => {
     const prefersReducedMotion =
       typeof window !== "undefined" &&
       window.matchMedia &&
       window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
+    // Global smooth scroll preference
     const root = document.documentElement;
     const prev = root.style.scrollBehavior;
     root.style.scrollBehavior = prefersReducedMotion ? "auto" : "smooth";
@@ -320,11 +272,11 @@ export default function Page() {
       console.assert(clampQty(-10) === 1, "clampQty should floor at 1");
       console.assert(clampQty(500) === 99, "clampQty should cap at 99");
       console.assert(formatInr(123).startsWith("₹"), "formatInr should prefix ₹");
+      console.assert(NAV_ITEMS.length >= 5, "NAV_ITEMS should have the section links");
     }
 
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
-        // Close any open panels
         setMobileMenuOpen(false);
         setFabOpen(false);
         setCheckoutOpen(false);
@@ -332,42 +284,34 @@ export default function Page() {
       }
     };
 
+    const onPointerDown = (e: PointerEvent) => {
+      if (!fabRef.current) return;
+      if (fabOpen && !fabRef.current.contains(e.target as Node)) setFabOpen(false);
+    };
+
     window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("pointerdown", onPointerDown);
 
     return () => {
       root.style.scrollBehavior = prev;
       window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("pointerdown", onPointerDown);
     };
-  }, []);
+  }, [fabOpen]);
 
   const scrollToId = (e: React.MouseEvent, id: string) => {
     e.preventDefault();
     const el = document.getElementById(id);
-    if (el) {
-      const prefersReducedMotion =
-        window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-      el.scrollIntoView({ behavior: prefersReducedMotion ? "auto" : "smooth", block: "start" });
-      history.replaceState(null, "", `#${id}`);
-    }
+    if (!el) return;
+
+    const prefersReducedMotion =
+      typeof window !== "undefined" &&
+      window.matchMedia &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    el.scrollIntoView({ behavior: prefersReducedMotion ? "auto" : "smooth", block: "start" });
+    history.replaceState(null, "", `#${id}`);
   };
-
-  // --- Cart state ---
-  const [checkoutOpen, setCheckoutOpen] = useState(false);
-  const [checkoutStep, setCheckoutStep] = useState<"cart" | "details" | "pay" | "success">("cart");
-  const [cart, setCart] = useState<CartItem[]>([]);
-  const [paying, setPaying] = useState(false);
-
-  // Mobile UI state
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [fabOpen, setFabOpen] = useState(false);
-
-  const [checkout, setCheckout] = useState<CheckoutForm>({
-    fullName: "",
-    phone: "",
-    address1: "",
-    city: "Kalyani",
-    pinCode: "",
-  });
 
   const cartCount = useMemo(() => cart.reduce((a, c) => a + c.qty, 0), [cart]);
 
@@ -377,13 +321,9 @@ export default function Page() {
       .map((ci) => {
         const p = byId.get(ci.productId);
         if (!p) return null;
-        return {
-          ...ci,
-          product: p,
-          lineTotal: p.priceInr * ci.qty,
-        };
+        return { ...ci, product: p, lineTotal: p.priceInr * ci.qty };
       })
-      .filter(Boolean) as Array<CartItem & { product: Product; lineTotal: number }>;
+      .filter(Boolean) as Array<{ productId: string; qty: number; product: Product; lineTotal: number }>;
   }, [cart]);
 
   const subTotal = useMemo(() => cartLines.reduce((a, l) => a + l.lineTotal, 0), [cartLines]);
@@ -411,21 +351,16 @@ export default function Page() {
         .filter((x) => x.qty > 0)
     );
   };
-
-  const removeItem = (productId: string) => {
-    setCart((prev) => prev.filter((x) => x.productId !== productId));
-  };
+  const removeItem = (productId: string) => setCart((prev) => prev.filter((x) => x.productId !== productId));
 
   const openCart = () => {
     setCheckoutOpen(true);
     setCheckoutStep("cart");
   };
-
   const proceedToDetails = () => {
     if (cartLines.length === 0) return;
     setCheckoutStep("details");
   };
-
   const proceedToPay = () => {
     if (!checkout.fullName.trim() || !checkout.phone.trim()) {
       alert("Please enter name and phone number.");
@@ -437,7 +372,6 @@ export default function Page() {
     }
     setCheckoutStep("pay");
   };
-
   const payNow = async () => {
     if (grandTotal <= 0) return;
     setPaying(true);
@@ -453,7 +387,6 @@ export default function Page() {
       setPaying(false);
     }
   };
-
   const closeOverlay = () => {
     setCheckoutOpen(false);
     setPaying(false);
@@ -468,194 +401,191 @@ export default function Page() {
       ? "Payment"
       : "Order placed";
 
-  const Logo = ({ className }: { className?: string }) => (
-    <div className={cn("rounded-2xl overflow-hidden bg-white", className)}>
-      <img
-        src="/images/logo.png"
-        alt={`${CLINIC.name} logo`}
-        className="h-full w-full object-contain scale-[1.25] origin-center"
-      />
-    </div>
-  );
-
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900">
-      <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/80 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
-          <div className="flex items-center gap-3">
-            <Logo className="h-10 w-10" />
-            <div>
-              <div className="text-sm font-semibold leading-tight">{CLINIC.name}</div>
-              <div className="text-xs text-slate-500">{CLINIC.city}</div>
+    <div className="min-h-screen bg-[radial-gradient(900px_600px_at_20%_0%,rgba(20,184,166,0.14),transparent_60%),radial-gradient(900px_600px_at_80%_10%,rgba(14,165,233,0.12),transparent_60%)]">
+      {/* Header */}
+      <header className="sticky top-0 z-40 border-b border-slate-200/70 bg-white/70 backdrop-blur">
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3 sm:px-6">
+          {/* Brand */}
+          <a href="#top" className="flex min-w-0 items-center gap-3">
+            <span className="relative h-10 w-10 shrink-0 overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-slate-200">
+              <Image
+                src={CLINIC.logoUrl}
+                alt={`${CLINIC.name} logo`}
+                fill
+                sizes="40px"
+                className="object-contain p-1"
+                priority
+              />
+            </span>
+            <div className="min-w-0">
+              <div className="truncate text-sm font-bold text-slate-900">{CLINIC.name}</div>
+              <div className="truncate text-xs text-slate-600">{CLINIC.city}</div>
             </div>
-          </div>
+          </a>
 
-          <nav className="hidden items-center gap-6 text-sm text-slate-600 md:flex">
-            <a href="#services" onClick={(e) => scrollToId(e, "services")} className="hover:text-slate-900">
-              Services
-            </a>
-            <a href="#doctors" onClick={(e) => scrollToId(e, "doctors")} className="hover:text-slate-900">
-              Doctors
-            </a>
-            <a href="#shop" onClick={(e) => scrollToId(e, "shop")} className="hover:text-slate-900">
-              Shop
-            </a>
-            <a href="#reviews" onClick={(e) => scrollToId(e, "reviews")} className="hover:text-slate-900">
-              Reviews
-            </a>
-            <a href="#contact" onClick={(e) => scrollToId(e, "contact")} className="hover:text-slate-900">
-              Contact
-            </a>
+          {/* Desktop nav */}
+          <nav className="hidden items-center gap-6 md:flex">
+            {NAV_ITEMS.map((it) => (
+              <a
+                key={it.id}
+                href={`#${it.id}`}
+                onClick={(e) => scrollToId(e, it.id)}
+                className="text-sm font-medium text-slate-700 hover:text-slate-900"
+              >
+                {it.label}
+              </a>
+            ))}
           </nav>
 
-          <div className="flex items-center gap-2">
-            {/* Mobile hamburger */}
-            <button
-              onClick={() => setMobileMenuOpen((s) => !s)}
-              className={cn(BTN.base, BTN.outline, "md:hidden rounded-xl px-3 py-2")}
-              aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
-              aria-expanded={mobileMenuOpen}
-              aria-controls="mobile-menu"
-            >
-              {mobileMenuOpen ? (
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 6l12 12M18 6L6 18" />
-                </svg>
-              ) : (
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
-                </svg>
-              )}
-              <span className="sr-only">Menu</span>
-            </button>
-
-            <button
-              onClick={openCart}
-              className={cn(BTN.base, BTN.outline, "relative rounded-xl px-3 py-2")}
-              aria-label="Open cart"
-            >
-              <IconBag className="h-4 w-4" />
+          {/* Desktop actions */}
+          <div className="hidden items-center gap-2 md:flex">
+            <button onClick={openCart} className={cn(BTN.base, BTN.outline)} type="button">
+              <ShoppingCart className="h-4 w-4" />
               Cart
               {cartCount > 0 ? (
-                <span className="ml-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-slate-900 px-1 text-xs font-bold text-white">
+                <span className="ml-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-slate-900 px-1 text-xs text-white">
                   {cartCount}
                 </span>
               ) : null}
             </button>
 
-            <WhatsAppLink className={cn("hidden md:inline-flex", BTN.base, BTN.whatsapp, "rounded-xl px-3 py-2")}>
-              <IconWhatsApp className="h-4 w-4" />
+            <WhatsAppLink className={cn(BTN.base, BTN.whatsapp)}>
+              <MessageCircle className="h-4 w-4" />
               WhatsApp
             </WhatsAppLink>
 
-            <CallLink className={cn(BTN.base, BTN.primary, "rounded-xl px-3 py-2")}>
-              <IconPhone className="h-4 w-4" />
+            <CallLink className={cn(BTN.base, BTN.primary)}>
+              <Phone className="h-4 w-4" />
               Call
             </CallLink>
           </div>
-        </div>
-      </header>
 
-      {/* Mobile menu panel */}
-      {mobileMenuOpen ? (
-        <div className="md:hidden">
-          <button
-            className="fixed inset-0 z-40 bg-black/30"
-            aria-label="Close menu overlay"
-            onClick={() => setMobileMenuOpen(false)}
-          />
-          <div
-            id="mobile-menu"
-            className="fixed left-0 right-0 top-[57px] z-50 mx-3 rounded-2xl border border-slate-200 bg-white shadow-xl"
-            role="dialog"
-            aria-modal="true"
-          >
-            <div className="p-3">
-              <div className="grid gap-2">
-                {["services", "doctors", "shop", "reviews", "contact"].map((id) => (
+          {/* Mobile actions */}
+          <div className="flex items-center gap-2 md:hidden">
+            <button
+              type="button"
+              onClick={openCart}
+              className={cn(BTN.base, BTN.outline, "px-3")}
+              aria-label="Open cart"
+            >
+              <ShoppingCart className="h-4 w-4" />
+              {cartCount > 0 ? (
+                <span className="ml-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-slate-900 px-1 text-xs text-white">
+                  {cartCount}
+                </span>
+              ) : null}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setMobileMenuOpen(true)}
+              className={cn(BTN.base, BTN.outline, "px-3")}
+              aria-label="Open menu"
+              aria-expanded={mobileMenuOpen}
+            >
+              <Menu className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+
+        {/* Mobile drawer */}
+        {mobileMenuOpen ? (
+          <div className="md:hidden">
+            <button
+              type="button"
+              className="fixed inset-0 z-40 bg-black/60"
+              onClick={() => setMobileMenuOpen(false)}
+              aria-label="Close menu"
+            />
+            <div className="fixed right-0 top-0 z-50 h-full w-[86%] max-w-sm border-l border-slate-200 bg-white opacity-100 shadow-xl">
+              <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
+                <div className="text-sm font-bold text-slate-900">Menu</div>
+                <button
+                  type="button"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className={cn(BTN.base, BTN.outline, "px-3")}
+                  aria-label="Close menu"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="space-y-1 bg-white p-4">
+                {NAV_ITEMS.map((it) => (
                   <a
-                    key={id}
-                    href={`#${id}`}
-                    className="rounded-xl px-4 py-3 text-sm font-semibold text-slate-800 hover:bg-slate-50"
+                    key={it.id}
+                    href={`#${it.id}`}
                     onClick={(e) => {
-                      scrollToId(e, id);
+                      scrollToId(e, it.id);
                       setMobileMenuOpen(false);
                     }}
+                    className="block rounded-xl px-3 py-3 text-sm font-semibold text-slate-800 hover:bg-slate-50"
                   >
-                    {id.charAt(0).toUpperCase() + id.slice(1)}
+                    {it.label}
                   </a>
                 ))}
               </div>
 
-              <div className="mt-3 grid grid-cols-2 gap-2">
+              <div className="mt-auto space-y-2 border-t border-slate-200 p-4">
+                <CallLink className={cn(BTN.base, BTN.primary, "w-full")}>
+                  <Phone className="h-4 w-4" />
+                  Call
+                </CallLink>
+                <WhatsAppLink className={cn(BTN.base, BTN.whatsapp, "w-full")}>
+                  <MessageCircle className="h-4 w-4" />
+                  WhatsApp
+                </WhatsAppLink>
                 <button
+                  type="button"
                   onClick={() => {
                     openCart();
                     setMobileMenuOpen(false);
                   }}
-                  className={cn(BTN.base, BTN.outline, "w-full rounded-xl px-3 py-2")}
+                  className={cn(BTN.base, BTN.outline, "w-full")}
                 >
-                  <IconBag className="h-4 w-4" />
+                  <ShoppingCart className="h-4 w-4" />
                   Cart
                   {cartCount > 0 ? (
-                    <span className="ml-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-slate-900 px-1 text-xs font-bold text-white">
+                    <span className="ml-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-slate-900 px-1 text-xs text-white">
                       {cartCount}
                     </span>
                   ) : null}
                 </button>
-
-                <CallLink className={cn(BTN.base, BTN.primary, "w-full rounded-xl px-3 py-2")}>
-                  <IconPhone className="h-4 w-4" />
-                  Call
-                </CallLink>
-
-                <WhatsAppLink className={cn(BTN.base, BTN.whatsapp, "col-span-2 w-full rounded-xl px-3 py-2")}>
-                  <IconWhatsApp className="h-4 w-4" />
-                  WhatsApp
-                </WhatsAppLink>
               </div>
             </div>
           </div>
-        </div>
-      ) : null}
+        ) : null}
+      </header>
 
       {/* Hero */}
-      <section className="relative overflow-hidden">
-        <div className="absolute inset-0 -z-10">
-          <div
-            className={cn(
-              "absolute -top-24 left-1/2 h-96 w-96 -translate-x-1/2 rounded-full blur-3xl opacity-30 bg-gradient-to-br",
-              THEME.accent
-            )}
-          />
-          <div className="absolute bottom-0 right-0 h-64 w-64 rounded-full bg-sky-200/40 blur-3xl" />
-        </div>
-
-        <div className="mx-auto grid max-w-6xl grid-cols-1 gap-10 px-4 py-12 md:grid-cols-2 md:py-16">
+      <section id="top" className="relative overflow-hidden">
+        <div className="mx-auto grid max-w-6xl items-center gap-10 px-4 py-12 sm:px-6 md:grid-cols-2 md:py-16">
           <div>
             <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white/70 px-3 py-1 text-xs font-semibold text-slate-700 shadow-sm">
-              <span className="h-2 w-2 rounded-full bg-emerald-500" />
+              <span className="h-2 w-2 rounded-full bg-teal-600" />
               Open for appointments
             </div>
-            <h1 className="mt-4 text-3xl font-semibold tracking-tight md:text-5xl">
+            <h1 className="mt-5 text-4xl font-bold tracking-tight text-slate-900 sm:text-5xl">
               Gentle, modern dental care for your whole family.
             </h1>
-            <p className="mt-4 text-sm text-slate-600 md:text-base">
-              Implants • Root Canal • Braces/Aligners • Kids Dentistry • Cleaning & Gum Care • Cosmetic Dentistry
+            <p className="mt-4 text-slate-600">
+              Implants • Root Canal • Braces/Aligners • Kids Dentistry • Cleaning &amp; Gum Care • Cosmetic Dentistry
             </p>
 
-            <div className="mt-6 flex flex-wrap gap-3">
+            <div className="mt-6 flex flex-col gap-3 sm:flex-row">
               <WhatsAppLink className={cn(BTN.base, BTN.whatsapp)}>
-                <IconWhatsApp className="h-5 w-5" />
+                <MessageCircle className="h-4 w-4" />
                 Chat on WhatsApp
-                <IconArrowRight className="h-5 w-5 opacity-90" />
               </WhatsAppLink>
-              <CallLink className={cn(BTN.base, BTN.outline)}>
-                <IconPhone className="h-5 w-5" />
+
+              <CallLink className={cn(BTN.base, BTN.primary)}>
+                <Phone className="h-4 w-4" />
                 Call now
               </CallLink>
+
               <a href="#book" onClick={(e) => scrollToId(e, "book")} className={cn(BTN.base, BTN.outline)}>
-                <IconCalendar className="h-5 w-5" />
+                <Calendar className="h-4 w-4" />
                 Book appointment
               </a>
             </div>
@@ -668,89 +598,38 @@ export default function Page() {
             </div>
           </div>
 
-          <div className="md:pl-6">
-            <div className="relative overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-              <div className={cn("absolute inset-0 bg-gradient-to-br opacity-20", THEME.accent)} />
-              <img src={CLINIC.heroImageUrl} alt="Clinic photo" className="h-[420px] w-full object-cover md:h-full" />
-              <div className="pointer-events-none absolute inset-0 ring-1 ring-inset ring-white/20" />
-            </div>
-            <div className="mt-3 text-xs text-slate-500">
-              Put a file at <span className="font-semibold">/public/images/clinic-hero.jpg</span>.
+          <div className="relative mx-auto w-full max-w-lg">
+            <div className="absolute -inset-3 rounded-[2rem] bg-gradient-to-br from-teal-200/50 via-sky-200/30 to-transparent blur-2xl" />
+            <div className="relative overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-lg">
+              <div className="relative aspect-[4/3] w-full">
+                <Image
+                  src={CLINIC.heroImageUrl}
+                  alt="Clinic hero"
+                  fill
+                  sizes="(max-width: 768px) 90vw, 520px"
+                  className="object-cover"
+                  priority
+                />
+              </div>
+              <div className="p-4">
+                <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-1">
+                    <Sparkles className="h-3.5 w-3.5 text-teal-600" /> Modern equipment
+                  </span>
+                  <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-1">
+                    <HeartPulse className="h-3.5 w-3.5 text-teal-600" /> Patient-friendly
+                  </span>
+                  <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-1">
+                    <SmilePlus className="h-3.5 w-3.5 text-teal-600" /> Family care
+                  </span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
       </section>
 
-      {/* Request a callback */}
-      <section id="book" className="mx-auto max-w-6xl px-4 pb-14">
-        <div className="grid grid-cols-1 gap-8 md:grid-cols-2 md:items-start">
-          <Card>
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <div className="text-sm font-semibold">Request a callback</div>
-                <div className="mt-1 text-xs text-slate-500">We’ll confirm on WhatsApp/Call.</div>
-              </div>
-              <Logo className="h-10 w-10" />
-            </div>
-
-            <form
-              className="mt-4 grid grid-cols-1 gap-3"
-              onSubmit={(e) => {
-                e.preventDefault();
-                alert("Prototype: connect this form to Google Sheets / CRM / email.");
-              }}
-            >
-              <input
-                className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-teal-200"
-                placeholder="Full name"
-                required
-              />
-              <input
-                className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-teal-200"
-                placeholder="Phone number"
-                inputMode="tel"
-                required
-              />
-              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                <input
-                  className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-teal-200"
-                  type="date"
-                />
-                <input
-                  className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-teal-200"
-                  type="time"
-                />
-              </div>
-              <select className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-teal-200">
-                {services.map((s) => (
-                  <option key={s.title} value={s.title}>
-                    {s.title}
-                  </option>
-                ))}
-                <option value="other">Other</option>
-              </select>
-              <button className={cn(BTN.base, BTN.primary, "w-full")} type="submit">
-                Request callback
-                <IconArrowRight className="h-5 w-5 opacity-90" />
-              </button>
-
-              <div className="mt-2 text-xs text-slate-500">
-                Not for emergencies. For severe pain/swelling/bleeding, please call.
-              </div>
-            </form>
-          </Card>
-
-          <div className="relative overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-            <div className={cn("absolute inset-0 bg-gradient-to-br opacity-15", THEME.accent)} />
-            <img src={CLINIC.bookingImageUrl} alt="Clinic" className="h-[360px] w-full object-cover" />
-            <div className="pointer-events-none absolute inset-0 ring-1 ring-inset ring-white/20" />
-            <div className="absolute bottom-4 left-4 right-4 rounded-2xl bg-white/80 p-3 text-xs text-slate-700 backdrop-blur">
-              Quick booking, friendly follow-ups on WhatsApp.
-            </div>
-          </div>
-        </div>
-      </section>
-
+      {/* Services */}
       <ServicesGrid />
 
       {/* Doctors */}
@@ -780,10 +659,10 @@ export default function Page() {
                     className={cn(BTN.base, BTN.primary, BTN.small, "flex-1")}
                   >
                     Consult
-                    <IconArrowRight className="h-4 w-4 opacity-90" />
+                    <ChevronRight className="h-4 w-4 opacity-90" />
                   </a>
                   <WhatsAppLink className={cn(BTN.base, BTN.whatsapp, BTN.small, "flex-1")}>
-                    <IconWhatsApp className="h-4 w-4" />
+                    <MessageCircle className="h-4 w-4" />
                     WhatsApp
                   </WhatsAppLink>
                 </div>
@@ -791,27 +670,7 @@ export default function Page() {
             ))}
           </div>
         </div>
-      </section>
-
-      {/* Reviews */}
-      <section id="reviews" className="mx-auto max-w-6xl px-4 py-14">
-        <SectionHeading
-          eyebrow="Patient reviews"
-          title="People come back because we keep it comfortable"
-          desc="Add real Google review snippets once you have them."
-        />
-        <div className="mt-10 grid grid-cols-1 gap-4 md:grid-cols-3">
-          {[1, 2, 3].map((i) => (
-            <Card key={i}>
-              <div className="text-sm font-semibold">★★★★★</div>
-              <div className="mt-2 text-sm text-slate-700">“Great experience. Clean clinic and gentle treatment.”</div>
-              <div className="mt-3 text-xs text-slate-500">— Patient {i}</div>
-            </Card>
-          ))}
-        </div>
-      </section>
-
-      {/* Shop */}
+      </section>      {/* Shop */}
       <section id="shop" className="bg-white">
         <div className="mx-auto max-w-6xl px-4 py-14">
           <SectionHeading
@@ -840,7 +699,7 @@ export default function Page() {
                     className={cn(BTN.base, BTN.outline, BTN.small, "rounded-xl px-3 py-2")}
                     onClick={() => addToCart(p.id)}
                   >
-                    <IconBag className="h-4 w-4" />
+                    <ShoppingBag className="h-4 w-4" />
                     Add
                   </button>
                 </div>
@@ -850,7 +709,7 @@ export default function Page() {
 
           <div className="mt-8 flex flex-wrap items-center gap-3">
             <button className={cn(BTN.base, BTN.primary)} onClick={openCart}>
-              <IconBag className="h-5 w-5" />
+              <ShoppingBag className="h-5 w-5" />
               View cart & checkout
               {cartCount > 0 ? (
                 <span className="ml-1 inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-white/90 px-2 text-xs font-bold text-slate-900">
@@ -863,434 +722,421 @@ export default function Page() {
         </div>
       </section>
 
-      {/* FAQ */}
-      <section className="mx-auto max-w-6xl px-4 py-14">
-        <SectionHeading eyebrow="FAQ" title="Quick answers" desc="Clear info, no fluff. For diagnosis, book a consultation." />
-        <div className="mt-10 grid grid-cols-1 gap-4 md:grid-cols-2">
-          {FAQS.map((f) => (
-            <FAQItem key={f.q} q={f.q} a={f.a} />
-          ))}
+
+      {/* Reviews (placeholder id preserved) */}
+      <section id="reviews" className="py-16 md:py-20">
+        <div className="mx-auto w-full max-w-6xl px-4 sm:px-6">
+          <SectionHeading eyebrow="Trust" title="Patient Reviews" desc="We can embed Google reviews or curated testimonials later." />
+          <div className="grid gap-6 md:grid-cols-3">
+            <Card>
+              <div className="text-sm font-semibold text-slate-900">“Very gentle and professional.”</div>
+              <div className="mt-3 text-xs text-slate-600">— Patient A</div>
+            </Card>
+            <Card>
+              <div className="text-sm font-semibold text-slate-900">“Clinic is clean, staff is helpful.”</div>
+              <div className="mt-3 text-xs text-slate-600">— Patient B</div>
+            </Card>
+            <Card>
+              <div className="text-sm font-semibold text-slate-900">“Quick appointment confirmation.”</div>
+              <div className="mt-3 text-xs text-slate-600">— Patient C</div>
+            </Card>
+          </div>
         </div>
       </section>
 
-      {/* Contact */}
-      <section id="contact" className="bg-white">
-        <div className="mx-auto grid max-w-6xl grid-cols-1 gap-8 px-4 py-14 md:grid-cols-2">
-          <div>
-            <h3 className="text-xl font-semibold">Visit us</h3>
-            <p className="mt-2 text-sm text-slate-600">Easy directions, fast follow-ups on WhatsApp.</p>
+      {/* Booking */}
+      <section id="book" className="py-16 md:py-20">
+        <div className="mx-auto w-full max-w-6xl px-4 sm:px-6">
+          <SectionHeading
+            eyebrow="Appointment"
+            title="Book a visit"
+            desc="Send your details and we’ll confirm the slot on WhatsApp/Call."
+          />
 
-            <div className="mt-5 space-y-3 text-sm">
-              <div className="rounded-2xl border border-slate-200 bg-white p-4">
-                <div className="text-xs font-semibold uppercase tracking-wider text-slate-500">Address</div>
-                <div className="mt-2 text-sm text-slate-700">
-                  {CLINIC.addressLines.map((l) => (
-                    <div key={l}>{l}</div>
-                  ))}
+          <div className="grid gap-6 md:grid-cols-2">
+            <Card>
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  alert("Form submitted (prototype). Next step: store this in Supabase Leads table.");
+                }}
+                className="space-y-4"
+              >
+                <div>
+                  <label className="text-xs font-semibold text-slate-700">Full name</label>
+                  <input
+                    className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-teal-200"
+                    placeholder="Your name"
+                    required
+                  />
                 </div>
-              </div>
+                <div>
+                  <label className="text-xs font-semibold text-slate-700">Phone</label>
+                  <input
+                    className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-teal-200"
+                    placeholder="10-digit mobile"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-slate-700">Service</label>
+                  <select className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-teal-200">
+                    {services.map((s) => (
+                      <option key={s.title}>{s.title}</option>
+                    ))}
+                  </select>
+                </div>
 
-              <div className="rounded-2xl border border-slate-200 bg-white p-4">
-                <div className="text-xs font-semibold uppercase tracking-wider text-slate-500">Hours</div>
-                <div className="mt-2 space-y-1 text-sm text-slate-700">
+                <button type="submit" className={cn(BTN.base, BTN.primary, "w-full")}>
+                  <Calendar className="h-4 w-4" />
+                  Request appointment
+                </button>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <WhatsAppLink className={cn(BTN.base, BTN.whatsapp, BTN.small)}>
+                    <MessageCircle className="h-4 w-4" />
+                    WhatsApp
+                  </WhatsAppLink>
+                  <CallLink className={cn(BTN.base, BTN.outline, BTN.small)}>
+                    <Phone className="h-4 w-4" />
+                    Call
+                  </CallLink>
+                </div>
+              </form>
+            </Card>
+
+            <div className="relative overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-lg">
+              <div className="relative aspect-[4/3] w-full">
+                <Image
+                  src={CLINIC.bookingImageUrl}
+                  alt="Clinic booking"
+                  fill
+                  sizes="(max-width: 768px) 90vw, 520px"
+                  className="object-cover"
+                />
+              </div>
+              <div className="space-y-3 p-5">
+                <div className="text-sm font-bold text-slate-900">Clinic hours</div>
+                <div className="grid gap-2">
                   {CLINIC.hours.map((h) => (
-                    <div key={h.day} className="flex justify-between">
-                      <span>{h.day}</span>
+                    <div key={h.day} className="flex items-center justify-between rounded-xl bg-slate-50 px-4 py-3 text-sm">
+                      <span className="font-semibold text-slate-800">{h.day}</span>
                       <span className="text-slate-600">{h.time}</span>
                     </div>
                   ))}
                 </div>
               </div>
-
-              <div className="flex flex-wrap gap-3">
-                <CallLink className={cn(BTN.base, BTN.primary)}>
-                  <IconPhone className="h-5 w-5" />
-                  Call {CLINIC.phoneDisplay}
-                </CallLink>
-                <WhatsAppLink className={cn(BTN.base, BTN.whatsapp)}>
-                  <IconWhatsApp className="h-5 w-5" />
-                  WhatsApp
-                </WhatsAppLink>
-              </div>
-            </div>
-          </div>
-
-          <div className="rounded-2xl border border-slate-200 bg-slate-100 p-3 md:p-4">
-            <div className="rounded-2xl bg-white p-4">
-              <div className="text-sm font-semibold">Find us on Google Maps</div>
-              <div className="mt-1 text-sm text-slate-600">{CLINIC.mapQuery}</div>
-            </div>
-
-            <div className="mt-3 overflow-hidden rounded-2xl border border-slate-200 bg-white">
-              <iframe
-                title="Smile & Care location"
-                src={googleMapsEmbedSrc(CLINIC.mapQuery)}
-                width="100%"
-                height={360}
-                loading="lazy"
-                referrerPolicy="no-referrer-when-downgrade"
-                className="block w-full"
-                allowFullScreen
-              />
-            </div>
-
-            <div className="mt-3 flex flex-wrap gap-2">
-              <a
-                href={googleMapsDirectionsHref(CLINIC.mapQuery)}
-                target="_blank"
-                rel="noreferrer"
-                className={cn(BTN.base, BTN.outline, BTN.small)}
-              >
-                Get directions
-                <IconArrowRight className="h-4 w-4 opacity-90" />
-              </a>
-              <WhatsAppLink className={cn(BTN.base, BTN.whatsapp, BTN.small)}>
-                <IconWhatsApp className="h-4 w-4" />
-                WhatsApp
-              </WhatsAppLink>
             </div>
           </div>
         </div>
       </section>
 
-      {/* Floating buttons */}
-      {/* Desktop: show the full stack */}
-      <div className="fixed bottom-5 right-5 z-50 hidden flex-col gap-3 md:flex">
-        <button className={cn(BTN.base, BTN.outline, "rounded-2xl px-4 py-3 shadow-lg")} onClick={openCart}>
-          <IconBag className="h-5 w-5" />
-          Cart
-          {cartCount > 0 ? (
-            <span className="ml-1 inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-slate-900 px-2 text-xs font-bold text-white">
-              {cartCount}
-            </span>
-          ) : null}
-        </button>
+      {/* Contact */}
+      <section id="contact" className="py-16 md:py-20">
+        <div className="mx-auto w-full max-w-6xl px-4 sm:px-6">
+          <SectionHeading eyebrow="Visit" title="Contact & Location" desc="Find us on the map or get directions." />
+          <div className="grid gap-6 md:grid-cols-2">
+            <Card>
+              <div className="text-sm font-bold text-slate-900">{CLINIC.name}</div>
+              <div className="mt-2 space-y-1 text-sm text-slate-600">
+                {CLINIC.addressLines.map((l) => (
+                  <div key={l}>{l}</div>
+                ))}
+              </div>
 
-        <WhatsAppLink className={cn(BTN.base, BTN.whatsapp, "rounded-2xl px-4 py-3 shadow-lg")}>
-          <IconWhatsApp className="h-5 w-5" />
-          WhatsApp
-        </WhatsAppLink>
+              <div className="mt-5 space-y-2">
+                <CallLink className={cn(BTN.base, BTN.primary, "w-full")}>
+                  <Phone className="h-4 w-4" />
+                  Call {CLINIC.phoneDisplay}
+                </CallLink>
+                <WhatsAppLink className={cn(BTN.base, BTN.whatsapp, "w-full")}>
+                  <MessageCircle className="h-4 w-4" />
+                  WhatsApp us
+                </WhatsAppLink>
+                <a
+                  className={cn(BTN.base, BTN.outline, "w-full")}
+                  href={googleMapsDirectionsHref(CLINIC.mapQuery)}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                  Get directions
+                </a>
+              </div>
+            </Card>
 
-        <CallLink className={cn(BTN.base, BTN.outline, "rounded-2xl px-4 py-3 shadow-lg")}>
-          <IconPhone className="h-5 w-5" />
-          Call
-        </CallLink>
-
-        <button
-          className={cn(BTN.base, BTN.outline, "rounded-2xl px-4 py-3 shadow-lg")}
-          onClick={() => alert("Prototype: embed Crisp/Tawk/Chatbase script here.")}
-        >
-          <IconChat className="h-5 w-5" />
-          Chat
-        </button>
-      </div>
-
-      {/* Mobile: single action button that expands */}
-      <div className="fixed bottom-5 right-5 z-50 md:hidden">
-        {fabOpen ? (
-          <>
-            <button className="fixed inset-0 bg-black/20" aria-label="Close quick actions" onClick={() => setFabOpen(false)} />
-            <div className="absolute bottom-16 right-0 w-56 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl">
-              <button
-                className="flex w-full items-center gap-2 px-4 py-3 text-sm font-semibold text-slate-800 hover:bg-slate-50"
-                onClick={() => {
-                  openCart();
-                  setFabOpen(false);
-                }}
-              >
-                <IconBag className="h-4 w-4" />
-                Cart
-                {cartCount > 0 ? (
-                  <span className="ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-slate-900 px-1 text-xs font-bold text-white">
-                    {cartCount}
-                  </span>
-                ) : null}
-              </button>
-
-              <WhatsAppLink className="flex w-full items-center gap-2 px-4 py-3 text-sm font-semibold text-slate-800 hover:bg-slate-50">
-                <IconWhatsApp className="h-4 w-4" />
-                WhatsApp
-              </WhatsAppLink>
-
-              <CallLink className="flex w-full items-center gap-2 px-4 py-3 text-sm font-semibold text-slate-800 hover:bg-slate-50">
-                <IconPhone className="h-4 w-4" />
-                Call
-              </CallLink>
-
-              <button
-                className="flex w-full items-center gap-2 px-4 py-3 text-sm font-semibold text-slate-800 hover:bg-slate-50"
-                onClick={() => {
-                  setFabOpen(false);
-                  alert("Prototype: embed Crisp/Tawk/Chatbase script here.");
-                }}
-              >
-                <IconChat className="h-4 w-4" />
-                Chat
-              </button>
+            <div className="rounded-2xl border border-slate-200 bg-slate-100 p-3 md:p-4">
+              <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+                <iframe
+                  title="Smile & Care location"
+                  src={googleMapsEmbedSrc(CLINIC.mapQuery)}
+                  width="100%"
+                  height="360"
+                  loading="lazy"
+                  referrerPolicy="no-referrer-when-downgrade"
+                  className="block w-full"
+                  allowFullScreen
+                />
+              </div>
             </div>
-          </>
+          </div>
+
+          <div className="mt-10 grid gap-4 md:grid-cols-2">
+            <SectionHeading eyebrow="FAQ" title="Common questions" desc="Quick answers for patients." />
+            <div className="grid gap-4">
+              {FAQS.map((f) => (
+                <FAQItem key={f.q} q={f.q} a={f.a} />
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Footer */}
+      <footer className="border-t border-slate-200 bg-white/60 py-10">
+        <div className="mx-auto max-w-6xl px-4 sm:px-6">
+          <div className="flex flex-col items-start justify-between gap-6 md:flex-row md:items-center">
+            <div>
+              <div className="text-sm font-bold text-slate-900">{CLINIC.name}</div>
+              <div className="mt-1 text-xs text-slate-600">{CLINIC.city}</div>
+            </div>
+            <div className="flex flex-wrap gap-3 text-sm">
+              {NAV_ITEMS.map((it) => (
+                <a
+                  key={it.id}
+                  href={`#${it.id}`}
+                  onClick={(e) => scrollToId(e, it.id)}
+                  className="text-slate-600 hover:text-slate-900"
+                >
+                  {it.label}
+                </a>
+              ))}
+            </div>
+          </div>
+          <div className="mt-8 text-xs text-slate-500">
+            © {new Date().getFullYear()} {CLINIC.name}. Prototype site.
+          </div>
+        </div>
+      </footer>
+
+      {/* Mobile FAB (replaces any bottom fixed action bar) */}
+      <div ref={fabRef} className="fixed bottom-5 right-5 z-50 md:hidden">
+        {fabOpen ? (
+          <div className="mb-3 flex flex-col items-end gap-2">
+            <button
+              type="button"
+              onClick={openCart}
+              className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-3 text-sm font-semibold shadow-lg"
+            >
+              <ShoppingCart className="h-4 w-4" />
+              Cart {cartCount > 0 ? `(${cartCount})` : ""}
+            </button>
+
+            <WhatsAppLink className="inline-flex items-center gap-2 rounded-full bg-[#25D366] px-4 py-3 text-sm font-semibold text-white shadow-lg">
+              <MessageCircle className="h-4 w-4" />
+              WhatsApp
+            </WhatsAppLink>
+
+            <CallLink className="inline-flex items-center gap-2 rounded-full bg-teal-600 px-4 py-3 text-sm font-semibold text-white shadow-lg">
+              <Phone className="h-4 w-4" />
+              Call
+            </CallLink>
+
+            <button
+              type="button"
+              onClick={() => {
+                // For now, "Chat" opens WhatsApp (later we can swap to website chat widget)
+                window.open(
+                  `https://wa.me/${CLINIC.whatsappNumber}?text=${encodeURIComponent("Hi, I have a question.")}`,
+                  "_blank",
+                  "noopener,noreferrer"
+                );
+                setFabOpen(false);
+              }}
+              className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-3 text-sm font-semibold shadow-lg"
+            >
+              <MessageCircle className="h-4 w-4" />
+              Chat
+            </button>
+          </div>
         ) : null}
 
         <button
-          className={cn(BTN.base, BTN.primary, "h-14 w-14 rounded-2xl p-0 shadow-xl")}
-          aria-label={fabOpen ? "Close actions" : "Open actions"}
+          type="button"
           onClick={() => setFabOpen((s) => !s)}
-        >
-          {fabOpen ? (
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-6 w-6">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 6l12 12M18 6L6 18" />
-            </svg>
-          ) : (
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-6 w-6">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 5v14M5 12h14" />
-            </svg>
+          className={cn(
+            "inline-flex h-14 w-14 items-center justify-center rounded-full shadow-xl transition",
+            fabOpen ? "bg-slate-900 text-white" : "bg-teal-600 text-white"
           )}
+          aria-label={fabOpen ? "Close quick actions" : "Open quick actions"}
+          aria-expanded={fabOpen}
+        >
+          {fabOpen ? <X className="h-6 w-6" /> : <Plus className="h-6 w-6" />}
         </button>
       </div>
 
-      {/* Cart + checkout overlay */}
+      {/* Cart / checkout overlay */}
       {checkoutOpen ? (
-        <div className="fixed inset-0 z-[60]">
-          <button className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" onClick={closeOverlay} />
-
-          <div
-            className="absolute right-0 top-0 h-full w-full max-w-md bg-white shadow-2xl"
-            role="dialog"
-            aria-modal="true"
-            aria-label="Cart and checkout"
-          >
+        <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/40 p-4 sm:items-center">
+          <button type="button" className="absolute inset-0" aria-label="Close checkout" onClick={closeOverlay} />
+          <div className="relative w-full max-w-xl rounded-2xl border border-slate-200 bg-white shadow-xl">
             <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
-              <div>
-                <div className="text-sm font-semibold">{checkoutTitle}</div>
-                <div className="text-xs text-slate-500">Cart + checkout prototype</div>
-              </div>
-              <button className={cn(BTN.base, BTN.outline, BTN.small)} onClick={closeOverlay}>
-                Close
+              <div className="text-sm font-bold text-slate-900">{checkoutTitle}</div>
+              <button type="button" className={cn(BTN.base, BTN.outline, "px-3")} onClick={closeOverlay}>
+                <X className="h-4 w-4" />
               </button>
             </div>
 
-            <div className="px-5 py-3 text-xs text-slate-600">
-              <span className={cn("font-semibold", checkoutStep === "cart" && "text-slate-900")}>Cart</span>
-              <span className="mx-2">→</span>
-              <span className={cn("font-semibold", checkoutStep === "details" && "text-slate-900")}>Details</span>
-              <span className="mx-2">→</span>
-              <span className={cn("font-semibold", checkoutStep === "pay" && "text-slate-900")}>Pay</span>
-            </div>
-
-            <div className="h-[calc(100%-120px)] overflow-auto px-5 py-4">
+            <div className="p-5">
               {checkoutStep === "cart" ? (
-                <div>
+                <div className="space-y-4">
                   {cartLines.length === 0 ? (
-                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
-                      Your cart is empty. Add a product from the Shop section.
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+                      Your cart is empty.
                     </div>
                   ) : (
                     <div className="space-y-3">
                       {cartLines.map((l) => (
-                        <div key={l.productId} className="rounded-2xl border border-slate-200 p-4">
-                          <div className="flex items-start justify-between gap-3">
-                            <div>
-                              <div className="text-sm font-semibold">{l.product.title}</div>
-                              <div className="mt-1 text-xs text-slate-500">{l.product.note}</div>
-                              <div className="mt-2 text-sm font-semibold">{formatInr(l.product.priceInr)}</div>
-                            </div>
-                            <button className={cn(BTN.base, BTN.danger, BTN.small)} onClick={() => removeItem(l.productId)}>
-                              Remove
-                            </button>
+                        <div key={l.productId} className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 p-3">
+                          <div className="min-w-0">
+                            <div className="truncate text-sm font-semibold text-slate-900">{l.product.title}</div>
+                            <div className="text-xs text-slate-600">{formatInr(l.product.priceInr)} each</div>
                           </div>
 
-                          <div className="mt-3 flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              <button
-                                className={cn(BTN.base, BTN.outline, BTN.small)}
-                                onClick={() => updateQty(l.productId, l.qty - 1)}
-                              >
-                                −
-                              </button>
-                              <input
-                                value={l.qty}
-                                onChange={(e) => updateQty(l.productId, Number(e.target.value))}
-                                className="h-9 w-14 rounded-xl border border-slate-200 bg-white text-center text-sm"
-                                inputMode="numeric"
-                              />
-                              <button
-                                className={cn(BTN.base, BTN.outline, BTN.small)}
-                                onClick={() => updateQty(l.productId, l.qty + 1)}
-                              >
-                                +
-                              </button>
-                            </div>
-                            <div className="text-sm font-semibold">{formatInr(l.lineTotal)}</div>
+                          <div className="flex items-center gap-2">
+                            <button type="button" className={cn(BTN.base, BTN.outline, "px-3")} onClick={() => updateQty(l.productId, l.qty - 1)}>
+                              <Minus className="h-4 w-4" />
+                            </button>
+                            <div className="w-8 text-center text-sm font-semibold">{l.qty}</div>
+                            <button type="button" className={cn(BTN.base, BTN.outline, "px-3")} onClick={() => updateQty(l.productId, l.qty + 1)}>
+                              <Plus className="h-4 w-4" />
+                            </button>
+                            <button type="button" className={cn(BTN.base, BTN.outline, "px-3")} onClick={() => removeItem(l.productId)} aria-label="Remove item">
+                              <Trash2 className="h-4 w-4" />
+                            </button>
                           </div>
                         </div>
                       ))}
                     </div>
                   )}
 
-                  <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm">
-                    <div className="flex justify-between">
+                  <div className="rounded-xl bg-slate-50 p-4 text-sm">
+                    <div className="flex items-center justify-between">
                       <span className="text-slate-600">Subtotal</span>
-                      <span className="font-semibold">{formatInr(subTotal)}</span>
+                      <span className="font-semibold text-slate-900">{formatInr(subTotal)}</span>
                     </div>
-                    <div className="mt-1 flex justify-between">
+                    <div className="mt-2 flex items-center justify-between">
                       <span className="text-slate-600">Shipping</span>
-                      <span className="font-semibold">{shipping === 0 ? "Free" : formatInr(shipping)}</span>
+                      <span className="font-semibold text-slate-900">{formatInr(shipping)}</span>
                     </div>
-                    <div className="mt-3 flex justify-between text-slate-900">
-                      <span className="font-semibold">Total</span>
-                      <span className="font-semibold">{formatInr(grandTotal)}</span>
+                    <div className="mt-3 flex items-center justify-between border-t border-slate-200 pt-3">
+                      <span className="text-slate-700">Total</span>
+                      <span className="text-base font-bold text-slate-900">{formatInr(grandTotal)}</span>
                     </div>
                   </div>
 
-                  <div className="mt-4 flex gap-2">
-                    <button
-                      className={cn(BTN.base, BTN.outline, "flex-1")}
-                      onClick={() => setCart([])}
-                      disabled={cartLines.length === 0}
-                    >
-                      Clear
+                  <div className="flex gap-3">
+                    <button type="button" className={cn(BTN.base, BTN.outline, "w-1/2")} onClick={closeOverlay}>
+                      Continue shopping
                     </button>
                     <button
-                      className={cn(BTN.base, BTN.primary, "flex-1")}
+                      type="button"
+                      className={cn(BTN.base, BTN.primary, "w-1/2")}
                       onClick={proceedToDetails}
                       disabled={cartLines.length === 0}
                     >
-                      Checkout
-                      <IconArrowRight className="h-5 w-5 opacity-90" />
+                      Next
+                      <ChevronRight className="h-4 w-4" />
                     </button>
                   </div>
                 </div>
               ) : null}
 
               {checkoutStep === "details" ? (
-                <div className="space-y-3">
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
-                    <div className="font-semibold">Delivery details</div>
-                    <div className="mt-1 text-slate-600">We’ll use this for delivery (prototype).</div>
+                <div className="space-y-4">
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div>
+                      <label className="text-xs font-semibold text-slate-700">Full name</label>
+                      <input
+                        value={checkout.fullName}
+                        onChange={(e) => setCheckout((s) => ({ ...s, fullName: e.target.value }))}
+                        className="mt-1 w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-teal-200"
+                        placeholder="Full name"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-semibold text-slate-700">Phone</label>
+                      <input
+                        value={checkout.phone}
+                        onChange={(e) => setCheckout((s) => ({ ...s, phone: e.target.value }))}
+                        className="mt-1 w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-teal-200"
+                        placeholder="10-digit mobile"
+                      />
+                    </div>
                   </div>
-
-                  <div className="grid gap-3">
-                    <input
-                      value={checkout.fullName}
-                      onChange={(e) => setCheckout((s) => ({ ...s, fullName: e.target.value }))}
-                      className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-teal-200"
-                      placeholder="Full name"
-                      required
-                    />
-                    <input
-                      value={checkout.phone}
-                      onChange={(e) => setCheckout((s) => ({ ...s, phone: e.target.value }))}
-                      className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-teal-200"
-                      placeholder="Phone number"
-                      inputMode="tel"
-                      required
-                    />
+                  <div>
+                    <label className="text-xs font-semibold text-slate-700">Address</label>
                     <input
                       value={checkout.address1}
                       onChange={(e) => setCheckout((s) => ({ ...s, address1: e.target.value }))}
-                      className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-teal-200"
-                      placeholder="Address"
-                      required
+                      className="mt-1 w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-teal-200"
+                      placeholder="House/Street"
                     />
-                    <div className="grid grid-cols-2 gap-3">
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div>
+                      <label className="text-xs font-semibold text-slate-700">City</label>
                       <input
                         value={checkout.city}
                         onChange={(e) => setCheckout((s) => ({ ...s, city: e.target.value }))}
-                        className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-teal-200"
+                        className="mt-1 w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-teal-200"
                         placeholder="City"
                       />
+                    </div>
+                    <div>
+                      <label className="text-xs font-semibold text-slate-700">PIN</label>
                       <input
                         value={checkout.pinCode}
                         onChange={(e) => setCheckout((s) => ({ ...s, pinCode: e.target.value }))}
-                        className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-teal-200"
+                        className="mt-1 w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-teal-200"
                         placeholder="PIN code"
-                        inputMode="numeric"
-                        required
                       />
                     </div>
                   </div>
 
-                  <div className="mt-4 flex gap-2">
-                    <button className={cn(BTN.base, BTN.outline, "flex-1")} onClick={() => setCheckoutStep("cart")}>
+                  <div className="flex gap-3">
+                    <button type="button" className={cn(BTN.base, BTN.outline, "w-1/2")} onClick={() => setCheckoutStep("cart")}>
                       Back
                     </button>
-                    <button className={cn(BTN.base, BTN.primary, "flex-1")} onClick={proceedToPay}>
-                      Continue
-                      <IconArrowRight className="h-5 w-5 opacity-90" />
+                    <button type="button" className={cn(BTN.base, BTN.primary, "w-1/2")} onClick={proceedToPay}>
+                      Pay
+                      <ChevronRight className="h-4 w-4" />
                     </button>
                   </div>
                 </div>
               ) : null}
 
               {checkoutStep === "pay" ? (
-                <div className="space-y-3">
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
-                    <div className="font-semibold">Order summary</div>
-                    <div className="mt-1 text-slate-600">Demo payment will simulate success.</div>
+                <div className="space-y-4">
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+                    Demo payment enabled. Total: <b>{formatInr(grandTotal)}</b>
                   </div>
-
-                  <div className="rounded-2xl border border-slate-200 p-4 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-slate-600">Subtotal</span>
-                      <span className="font-semibold">{formatInr(subTotal)}</span>
-                    </div>
-                    <div className="mt-1 flex justify-between">
-                      <span className="text-slate-600">Shipping</span>
-                      <span className="font-semibold">{shipping === 0 ? "Free" : formatInr(shipping)}</span>
-                    </div>
-                    <div className="mt-3 flex justify-between text-slate-900">
-                      <span className="font-semibold">Total</span>
-                      <span className="font-semibold">{formatInr(grandTotal)}</span>
-                    </div>
-                  </div>
-
-                  <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm">
-                    <div className="text-xs font-semibold uppercase tracking-wider text-slate-500">Deliver to</div>
-                    <div className="mt-2 text-slate-700">
-                      <div className="font-semibold">{checkout.fullName || ""}</div>
-                      <div className="text-slate-600">{checkout.phone || ""}</div>
-                      <div className="mt-2 text-slate-600">
-                        {checkout.address1 || ""}, {checkout.city || ""} {checkout.pinCode || ""}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="mt-4 flex gap-2">
-                    <button className={cn(BTN.base, BTN.outline, "flex-1")} onClick={() => setCheckoutStep("details")}>
-                      Back
-                    </button>
-                    <button
-                      className={cn(BTN.base, BTN.primary, "flex-1")}
-                      onClick={payNow}
-                      disabled={paying || grandTotal <= 0}
-                    >
-                      {paying ? "Processing…" : `Pay ${formatInr(grandTotal)}`}
-                      <IconArrowRight className="h-5 w-5 opacity-90" />
-                    </button>
-                  </div>
-
-                  <div className="text-xs text-slate-500">
-                    Note: This is a prototype. We’ll wire Razorpay later for real payments.
-                  </div>
+                  <button type="button" className={cn(BTN.base, BTN.primary, "w-full")} onClick={payNow} disabled={paying}>
+                    {paying ? "Processing..." : `Pay ${formatInr(grandTotal)}`}
+                  </button>
+                  <button type="button" className={cn(BTN.base, BTN.outline, "w-full")} onClick={() => setCheckoutStep("details")}>
+                    Back
+                  </button>
                 </div>
               ) : null}
 
               {checkoutStep === "success" ? (
-                <div className="space-y-3">
-                  <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
-                    <div className="font-semibold">Payment successful (demo)</div>
-                    <div className="mt-1 text-emerald-800">Your order has been placed. We’ll confirm shortly.</div>
+                <div className="space-y-4">
+                  <div className="rounded-xl border border-teal-200 bg-teal-50 p-4 text-sm text-teal-800">
+                    Payment successful (demo). We’ll add real gateway later.
                   </div>
-
-                  <button
-                    className={cn(BTN.base, BTN.primary, "w-full")}
-                    onClick={() => {
-                      setCheckoutStep("cart");
-                      setCheckoutOpen(false);
-                    }}
-                  >
-                    Continue shopping
-                    <IconArrowRight className="h-5 w-5 opacity-90" />
+                  <button type="button" className={cn(BTN.base, BTN.primary, "w-full")} onClick={closeOverlay}>
+                    Close
                   </button>
                 </div>
               ) : null}
@@ -1298,21 +1144,6 @@ export default function Page() {
           </div>
         </div>
       ) : null}
-
-      <footer className="border-t border-slate-200 bg-white">
-        <div className="mx-auto max-w-6xl px-4 py-10">
-          <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
-            <div className="flex items-center gap-3">
-              <Logo className="h-9 w-9" />
-              <div>
-                <div className="text-sm font-semibold">{CLINIC.name}</div>
-                <div className="text-xs text-slate-500">{CLINIC.city}</div>
-              </div>
-            </div>
-            <div className="text-xs text-slate-500">© {new Date().getFullYear()} {CLINIC.name}. All rights reserved.</div>
-          </div>
-        </div>
-      </footer>
     </div>
   );
 }
