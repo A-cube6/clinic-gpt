@@ -1,0 +1,25 @@
+Optional (Step 02): gate checkout behind login
+
+1) Add to your existing `app/page.tsx` imports:
+   import AuthModal from "@/components/AuthModal";
+   import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
+
+2) Add state:
+   const [authOpen, setAuthOpen] = useState(false);
+
+3) Create a supabase browser client and session state (client-side):
+   const supabase = useMemo(() => createSupabaseBrowserClient(), []);
+   const [user, setUser] = useState<any>(null);
+   useEffect(() => {
+     supabase.auth.getUser().then(({ data }) => setUser(data.user));
+     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+       setUser(session?.user ?? null);
+     });
+     return () => sub.subscription.unsubscribe();
+   }, [supabase]);
+
+4) In `proceedToDetails` (or before pay), add:
+   if (!user) { setAuthOpen(true); return; }
+
+5) Render the modal near the bottom of the component:
+   <AuthModal open={authOpen} onClose={() => setAuthOpen(false)} title="Sign in to checkout" nextPath="/#shop" />
