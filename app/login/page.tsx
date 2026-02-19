@@ -7,7 +7,6 @@ import { useSearchParams } from "next/navigation";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 
 export const dynamic = "force-dynamic";
-export const revalidate = 0;
 
 export default function LoginPage() {
   const supabase = React.useMemo(() => createSupabaseBrowserClient(), []);
