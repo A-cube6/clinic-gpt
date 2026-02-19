@@ -42,8 +42,8 @@ const CLINIC = {
   name: "Smile & Care Dental Clinic",
   city: "Kalyani, West Bengal",
   phoneDisplay: "+91 98XX-XXX-XXX",
-  phoneTel: "+9198XXXXXXXX",
-  whatsappNumber: "9198XXXXXXXX", // digits only (countrycode + number)
+  phoneTel: "+919831803154",
+  whatsappNumber: "+919831803154", // digits only (countrycode + number)
   addressLines: ["B-9/20 CA, Block B (B9)", "Kalyani, West Bengal 741235", "India"],
   mapQuery: "B-9/20 CA, B 9, B9, Block B, Kalyani, West Bengal 741235, India",
   hours: [
