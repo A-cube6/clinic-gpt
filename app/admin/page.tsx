@@ -1,7 +1,7 @@
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export default async function AdminHome() {
-  const supabase = createSupabaseServerClient();
+  const supabase = await createSupabaseServerClient();
   const { data: auth } = await supabase.auth.getUser();
 
   // Lightweight counts for MVP dashboard (tables added in the SQL snippet)
