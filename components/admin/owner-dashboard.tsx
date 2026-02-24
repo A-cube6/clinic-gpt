@@ -1,73 +1,46 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
+import {
+  Download,
+  Pencil,
+  Plus,
+  Printer,
+  Trash2,
+  Users,
+  Package,
+  UserRound,
+  X,
+  RefreshCw,
+} from "lucide-react";
 
-export function cn(...classes: Array<string | false | null | undefined>) {
+type StaffRow = { id: string; role: string; full_name?: string | null };
+type CustomerRow = { id: string; email: string; full_name?: string | null; phone?: string | null; created_at?: string | null };
+type CatalogRow = { id: string; title: string; note?: string | null; price_inr: number; active: boolean; created_at?: string | null };
+
+function cn(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");
 }
 
-export function CardShell({
-  title,
-  subtitle,
-  cta,
-  onClick,
-}: {
-  title: string;
-  subtitle: string;
-  cta: string;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="group w-full rounded-2xl border border-slate-200 bg-white/80 p-6 text-left shadow-sm backdrop-blur transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
-    >
-      <div className="text-sm font-semibold text-slate-900">{title}</div>
-      <div className="mt-1 text-sm text-slate-600">{subtitle}</div>
-      <div className="mt-5 inline-flex items-center rounded-xl bg-slate-900 px-3 py-2 text-xs font-semibold text-white transition group-hover:bg-slate-800">
-        {cta}
-      </div>
-    </button>
-  );
+function shortId(id: string) {
+  if (!id) return "";
+  return `${id.slice(0, 6)}…${id.slice(-4)}`;
 }
 
-export type ColumnSpec<T> = {
-  key: keyof T;
-  label: string;
-  type: "text" | "number" | "boolean" | "datetime" | "select";
-  options?: string[];
-  required?: boolean;
-  readOnly?: boolean;
-};
-
-export type EntitySpec<T extends Record<string, any>> = {
-  title: string;
-  description?: string;
-  table: string;
-  primaryKey: keyof T;
-  columns: Array<ColumnSpec<T>>;
-  defaultRow: () => Partial<T>;
-  exportFileName: string;
-};
-
-function toCsv<T extends Record<string, any>>(rows: T[], cols: Array<ColumnSpec<T>>) {
-  const header = cols.map((c) => String(c.label));
-  const lines = rows.map((r) =>
-    cols
-      .map((c) => {
-        const v = r[String(c.key)] as any;
-        const cell = v === null || v === undefined ? "" : String(v);
-        // escape quotes
-        return `"${cell.replaceAll('"', '""')}"`;
-      })
-      .join(",")
-  );
-  return [header.join(","), ...lines].join("\n");
+function toCsv(rows: any[], headers: string[]) {
+  const esc = (v: any) => {
+    const s = v === null || v === undefined ? "" : String(v);
+    if (/[",\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+    return s;
+  };
+  const lines = [headers.join(",")];
+  for (const r of rows) lines.push(headers.map((h) => esc(r[h])).join(","));
+  return lines.join("\n");
 }
 
-function downloadTextFile(filename: string, content: string) {
-  const blob = new Blob([content], { type: "text/csv;charset=utf-8;" });
+function downloadText(filename: string, text: string) {
+  const blob = new Blob([text], { type: "text/csv;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
@@ -78,347 +51,671 @@ function downloadTextFile(filename: string, content: string) {
   URL.revokeObjectURL(url);
 }
 
-function printTableHtml(title: string, html: string) {
-  const w = window.open("", "_blank", "noopener,noreferrer");
-  if (!w) return;
-  w.document.write(`<!doctype html><html><head><title>${title}</title>
-    <meta charset="utf-8" />
-    <style>
-      body{font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial; padding:20px;}
-      h1{font-size:18px;margin:0 0 12px;}
-      table{border-collapse:collapse;width:100%;}
-      th,td{border:1px solid #e2e8f0;padding:8px;font-size:12px;text-align:left;}
-      th{background:#f8fafc;}
-    </style>
-  </head><body><h1>${title}</h1>${html}</body></html>`);
-  w.document.close();
-  w.focus();
-  w.print();
+function CardShell({
+  icon,
+  title,
+  desc,
+  cta,
+  onOpen,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  desc: string;
+  cta: string;
+  onOpen: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="group w-full rounded-2xl border border-slate-200 bg-white/80 p-6 text-left shadow-sm backdrop-blur transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
+    >
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex items-start gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-800 transition-colors group-hover:bg-teal-600 group-hover:text-white">
+            {icon}
+          </div>
+          <div>
+            <div className="text-base font-bold text-slate-900">{title}</div>
+            <div className="mt-1 text-sm text-slate-600">{desc}</div>
+          </div>
+        </div>
+        <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 group-hover:border-teal-200 group-hover:text-teal-700">
+          {cta}
+        </div>
+      </div>
+    </button>
+  );
 }
 
-export function ManageModal<T extends Record<string, any>>({
-  supabase,
-  spec,
+function Modal({
+  title,
+  open,
   onClose,
+  children,
 }: {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  supabase: any;
-  spec: EntitySpec<T>;
+  title: string;
+  open: boolean;
   onClose: () => void;
+  children: React.ReactNode;
 }) {
-  const [rows, setRows] = useState<T[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-[80] flex items-end justify-center bg-black/40 p-4 sm:items-center">
+      <button type="button" className="absolute inset-0" aria-label="Close" onClick={onClose} />
+      <div className="relative w-full max-w-5xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl">
+        <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+          <div className="text-sm font-bold text-slate-900">{title}</div>
+          <button
+            type="button"
+            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+            onClick={onClose}
+          >
+            <X className="h-4 w-4" />
+            Close
+          </button>
+        </div>
+        <div className="p-5">{children}</div>
+      </div>
+    </div>
+  );
+}
 
-  const [editOpen, setEditOpen] = useState(false);
-  const [editRow, setEditRow] = useState<Partial<T> | null>(null);
+function Toolbar({
+  onRefresh,
+  onAdd,
+  onExport,
+  onPrint,
+  addLabel,
+}: {
+  onRefresh: () => void;
+  onAdd: () => void;
+  onExport: () => void;
+  onPrint: () => void;
+  addLabel: string;
+}) {
+  return (
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-wrap gap-2">
+        <button
+          className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+          onClick={onRefresh}
+          type="button"
+        >
+          <RefreshCw className="h-4 w-4" />
+          Refresh
+        </button>
+        <button
+          className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-800"
+          onClick={onAdd}
+          type="button"
+        >
+          <Plus className="h-4 w-4" />
+          {addLabel}
+        </button>
+      </div>
 
-  const pk = String(spec.primaryKey);
+      <div className="flex flex-wrap gap-2">
+        <button
+          className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+          onClick={onExport}
+          type="button"
+        >
+          <Download className="h-4 w-4" />
+          Export CSV
+        </button>
+        <button
+          className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+          onClick={onPrint}
+          type="button"
+        >
+          <Printer className="h-4 w-4" />
+          Print
+        </button>
+      </div>
+    </div>
+  );
+}
 
-  const load = async () => {
-    setLoading(true);
-    setError(null);
+function Table({
+  headers,
+  children,
+}: {
+  headers: string[];
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200">
+      <table className="w-full border-collapse text-left text-sm">
+        <thead className="bg-slate-50">
+          <tr>
+            {headers.map((h) => (
+              <th key={h} className="px-4 py-3 font-semibold text-slate-700">
+                {h}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody className="bg-white">{children}</tbody>
+      </table>
+    </div>
+  );
+}
 
-    // Choose a default ordering if created_at exists
-    const hasCreatedAt = spec.columns.some((c) => String(c.key) === "created_at");
-    const q = supabase.from(spec.table).select("*");
-    const res = hasCreatedAt ? await q.order("created_at", { ascending: false }) : await q;
+export default function OwnerDashboard() {
+  const supabase = useMemo(() => createSupabaseBrowserClient(), []);
 
-    if (res.error) {
-      setError(res.error.message);
-      setRows([]);
-      setLoading(false);
+  const [openStaff, setOpenStaff] = useState(false);
+  const [openCustomers, setOpenCustomers] = useState(false);
+  const [openCatalog, setOpenCatalog] = useState(false);
+
+  // --- STAFF ---
+  const [staff, setStaff] = useState<StaffRow[]>([]);
+  const [staffLoading, setStaffLoading] = useState(false);
+  const [staffError, setStaffError] = useState<string | null>(null);
+  const [staffEdit, setStaffEdit] = useState<Partial<StaffRow> | null>(null);
+
+  const loadStaff = async () => {
+    setStaffLoading(true);
+    setStaffError(null);
+    const { data, error } = await supabase
+      .from("staff_profiles")
+      .select("id, role, full_name")
+      .order("role", { ascending: true });
+    if (error) setStaffError(error.message);
+    setStaff((data ?? []) as StaffRow[]);
+    setStaffLoading(false);
+  };
+
+  const upsertStaff = async () => {
+    if (!staffEdit?.id) return;
+    if (!confirm("Update this staff member?")) return;
+    const payload = {
+      id: staffEdit.id,
+      role: staffEdit.role ?? "reception",
+      full_name: staffEdit.full_name ?? null,
+    };
+    const { error } = await supabase.from("staff_profiles").upsert(payload, { onConflict: "id" });
+    if (error) {
+      alert(error.message);
       return;
     }
-    setRows((res.data as T[]) ?? []);
-    setLoading(false);
+    setStaffEdit(null);
+    await loadStaff();
+  };
+
+  const deleteStaff = async (id: string) => {
+    if (!confirm("Delete this staff member? This cannot be undone.")) return;
+    const { error } = await supabase.from("staff_profiles").delete().eq("id", id);
+    if (error) alert(error.message);
+    await loadStaff();
+  };
+
+  // --- CUSTOMERS ---
+  const [customers, setCustomers] = useState<CustomerRow[]>([]);
+  const [custLoading, setCustLoading] = useState(false);
+  const [custError, setCustError] = useState<string | null>(null);
+  const [custEdit, setCustEdit] = useState<Partial<CustomerRow> | null>(null);
+
+  const loadCustomers = async () => {
+    setCustLoading(true);
+    setCustError(null);
+    const { data, error } = await supabase
+      .from("customers")
+      .select("id, email, full_name, phone, created_at")
+      .order("created_at", { ascending: false });
+    if (error) setCustError(error.message);
+    setCustomers((data ?? []) as CustomerRow[]);
+    setCustLoading(false);
+  };
+
+  const upsertCustomer = async () => {
+    if (!custEdit?.email) return;
+    if (!confirm("Save this customer record?")) return;
+
+    const payload: any = {
+      email: custEdit.email.trim(),
+      full_name: custEdit.full_name ?? null,
+      phone: custEdit.phone ?? null,
+    };
+    if (custEdit.id) payload.id = custEdit.id;
+
+    const { error } = await supabase.from("customers").upsert(payload, { onConflict: "email" });
+    if (error) {
+      alert(error.message);
+      return;
+    }
+    setCustEdit(null);
+    await loadCustomers();
+  };
+
+  const deleteCustomer = async (id: string) => {
+    if (!confirm("Delete this customer? This cannot be undone.")) return;
+    const { error } = await supabase.from("customers").delete().eq("id", id);
+    if (error) alert(error.message);
+    await loadCustomers();
+  };
+
+  // --- CATALOG ---
+  const [catalog, setCatalog] = useState<CatalogRow[]>([]);
+  const [catLoading, setCatLoading] = useState(false);
+  const [catError, setCatError] = useState<string | null>(null);
+  const [catEdit, setCatEdit] = useState<Partial<CatalogRow> | null>(null);
+
+  const loadCatalog = async () => {
+    setCatLoading(true);
+    setCatError(null);
+    const { data, error } = await supabase
+      .from("catalog_items")
+      .select("id, title, note, price_inr, active, created_at")
+      .order("created_at", { ascending: false });
+    if (error) setCatError(error.message);
+    setCatalog((data ?? []) as CatalogRow[]);
+    setCatLoading(false);
+  };
+
+  const upsertCatalog = async () => {
+    if (!catEdit?.title) return;
+    if (!confirm("Save this catalog item?")) return;
+
+    const payload: any = {
+      title: catEdit.title.trim(),
+      note: catEdit.note ?? null,
+      price_inr: Number.isFinite(Number(catEdit.price_inr)) ? Number(catEdit.price_inr) : 0,
+      active: !!catEdit.active,
+    };
+    if (catEdit.id) payload.id = catEdit.id;
+
+    const { error } = await supabase.from("catalog_items").upsert(payload);
+    if (error) {
+      alert(error.message);
+      return;
+    }
+    setCatEdit(null);
+    await loadCatalog();
+  };
+
+  const deleteCatalog = async (id: string) => {
+    if (!confirm("Delete this catalog item? This cannot be undone.")) return;
+    const { error } = await supabase.from("catalog_items").delete().eq("id", id);
+    if (error) alert(error.message);
+    await loadCatalog();
   };
 
   useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [spec.table]);
-
-  const tableHtml = useMemo(() => {
-    const cols = spec.columns;
-    const header = `<tr>${cols.map((c) => `<th>${c.label}</th>`).join("")}</tr>`;
-    const body = rows
-      .map((r) => `<tr>${cols.map((c) => `<td>${String((r as any)[String(c.key)] ?? "")}</td>`).join("")}</tr>`)
-      .join("");
-    return `<table><thead>${header}</thead><tbody>${body}</tbody></table>`;
-  }, [rows, spec.columns]);
-
-  const openEdit = (row?: T) => {
-    setEditRow(row ? { ...row } : spec.defaultRow());
-    setEditOpen(true);
-  };
-
-  const closeEdit = () => {
-    setEditOpen(false);
-    setEditRow(null);
-  };
-
-  const saveEdit = async () => {
-    if (!editRow) return;
-
-    // Validate required fields
-    for (const c of spec.columns) {
-      if (!c.required) continue;
-      const v = (editRow as any)[String(c.key)];
-      if (c.type === "number") {
-        if (v === null || v === undefined || Number.isNaN(Number(v))) {
-          alert(`Please enter ${c.label}.`);
-          return;
-        }
-      } else if (c.type === "boolean") {
-        // ok
-      } else {
-        if (!String(v ?? "").trim()) {
-          alert(`Please enter ${c.label}.`);
-          return;
-        }
-      }
-    }
-
-    const isUpdate = Boolean((editRow as any)[pk]);
-    const confirmMsg = isUpdate ? `Save changes to this ${spec.title} record?` : `Create new ${spec.title} record?`;
-    if (!confirm(confirmMsg)) return;
-
-    // Remove read-only columns and empty string id on insert
-    const payload: Record<string, any> = { ...editRow };
-    spec.columns.forEach((c) => {
-      if (c.readOnly) delete payload[String(c.key)];
-    });
-    if (!isUpdate) {
-      if (payload[pk] === "") delete payload[pk];
-    }
-
-    const res = isUpdate
-      ? await supabase.from(spec.table).update(payload).eq(pk, (editRow as any)[pk])
-      : await supabase.from(spec.table).insert(payload);
-
-    if (res.error) {
-      alert(`Save failed: ${res.error.message}`);
-      return;
-    }
-
-    closeEdit();
-    await load();
-  };
-
-  const deleteRow = async (row: T) => {
-    const id = (row as any)[pk];
-    if (!id) return;
-    if (!confirm(`Delete this record? This cannot be undone.`)) return;
-
-    const res = await supabase.from(spec.table).delete().eq(pk, id);
-    if (res.error) {
-      alert(`Delete failed: ${res.error.message}`);
-      return;
-    }
-    await load();
-  };
+    if (openStaff) loadStaff();
+  }, [openStaff]);
+  useEffect(() => {
+    if (openCustomers) loadCustomers();
+  }, [openCustomers]);
+  useEffect(() => {
+    if (openCatalog) loadCatalog();
+  }, [openCatalog]);
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-end justify-center bg-black/40 p-4 sm:items-center">
-      <button type="button" className="absolute inset-0" aria-label="Close" onClick={onClose} />
-
-      <div className="relative w-full max-w-6xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl">
-        <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
-          <div>
-            <div className="text-sm font-bold text-slate-900">{spec.title}</div>
-            {spec.description ? <div className="mt-1 text-sm text-slate-600">{spec.description}</div> : null}
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => downloadTextFile(spec.exportFileName, toCsv(rows, spec.columns))}
-              className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-            >
-              Export CSV
-            </button>
-            <button
-              type="button"
-              onClick={() => printTableHtml(spec.title, tableHtml)}
-              className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-            >
-              Print
-            </button>
-            <button
-              type="button"
-              onClick={() => openEdit()}
-              className="rounded-xl bg-slate-900 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-800"
-            >
-              + Add
-            </button>
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-            >
-              Close
-            </button>
-          </div>
+    <main className="mx-auto max-w-6xl px-4 py-14">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">Owner dashboard</h1>
+          <p className="mt-1 text-sm text-slate-600">Manage staff, customers, and catalog items.</p>
         </div>
+      </div>
 
-        <div className="max-h-[72vh] overflow-auto p-5">
-          {loading ? <div className="text-sm text-slate-600">Loading…</div> : null}
-          {error ? (
-            <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>
-          ) : null}
+      <div className="mt-8 grid gap-4 md:grid-cols-3">
+        <CardShell
+          icon={<Users className="h-5 w-5" />}
+          title="Staff"
+          desc="Owner can edit roles & names."
+          cta="Manage"
+          onOpen={() => setOpenStaff(true)}
+        />
+        <CardShell
+          icon={<UserRound className="h-5 w-5" />}
+          title="Customers"
+          desc="Customer directory (logins later)."
+          cta="Manage"
+          onOpen={() => setOpenCustomers(true)}
+        />
+        <CardShell
+          icon={<Package className="h-5 w-5" />}
+          title="Item catalog"
+          desc="Products for shop (DB-backed)."
+          cta="Manage"
+          onOpen={() => setOpenCatalog(true)}
+        />
+      </div>
 
-          {!loading && !error ? (
-            <div className="overflow-hidden rounded-2xl border border-slate-200">
-              <table className="w-full text-left text-sm">
-                <thead className="bg-slate-50 text-xs uppercase tracking-wider text-slate-600">
-                  <tr>
-                    {spec.columns.map((c) => (
-                      <th key={String(c.key)} className="px-4 py-3">
-                        {c.label}
-                      </th>
-                    ))}
-                    <th className="px-4 py-3">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-200 bg-white">
-                  {rows.map((r) => (
-                    <tr key={String((r as any)[pk] ?? Math.random())} className="hover:bg-slate-50">
-                      {spec.columns.map((c) => (
-                        <td key={String(c.key)} className="px-4 py-3 align-top">
-                          {String((r as any)[String(c.key)] ?? "")}
-                        </td>
-                      ))}
-                      <td className="px-4 py-3">
-                        <div className="flex flex-wrap gap-2">
-                          <button
-                            type="button"
-                            className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-                            onClick={() => openEdit(r)}
-                          >
-                            Edit
-                          </button>
-                          <button
-                            type="button"
-                            className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50"
-                            onClick={() => deleteRow(r)}
-                          >
-                            Delete
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              {rows.length === 0 ? <div className="p-6 text-sm text-slate-600">No rows yet.</div> : null}
-            </div>
-          ) : null}
-        </div>
+      <Modal title="Staff" open={openStaff} onClose={() => setOpenStaff(false)}>
+        <Toolbar
+          onRefresh={loadStaff}
+          onAdd={() => setStaffEdit({ id: "", role: "reception", full_name: "" })}
+          addLabel="Add/Upsert"
+          onExport={() => {
+            const rows = staff.map((s) => ({
+              id: s.id,
+              full_name: s.full_name ?? "",
+              role: s.role,
+            }));
+            downloadText("staff.csv", toCsv(rows, ["id", "full_name", "role"])) ;
+          }}
+          onPrint={() => window.print()}
+        />
+        {staffError ? <div className="mt-4 text-sm text-red-600">{staffError}</div> : null}
+        {staffLoading ? <div className="mt-4 text-sm text-slate-600">Loading…</div> : null}
 
-        {editOpen && editRow ? (
-          <div className="fixed inset-0 z-[80] flex items-end justify-center bg-black/40 p-4 sm:items-center">
-            <button type="button" className="absolute inset-0" aria-label="Close edit" onClick={closeEdit} />
-            <div className="relative w-full max-w-2xl rounded-2xl border border-slate-200 bg-white shadow-xl">
-              <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
-                <div className="text-sm font-bold text-slate-900">{(editRow as any)[pk] ? "Edit" : "Add"} {spec.title}</div>
-                <button
-                  type="button"
-                  onClick={closeEdit}
-                  className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+        <Table headers={["Name", "Role", "User ID", "Actions"]}>
+          {staff.map((s) => (
+            <tr key={s.id} className="border-t border-slate-200">
+              <td className="px-4 py-3 font-semibold text-slate-900">
+                {s.full_name?.trim() ? s.full_name : <span className="text-slate-500">{shortId(s.id)}</span>}
+              </td>
+              <td className="px-4 py-3 text-slate-700">{s.role}</td>
+              <td className="px-4 py-3 font-mono text-xs text-slate-500">{shortId(s.id)}</td>
+              <td className="px-4 py-3">
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                    onClick={() => setStaffEdit({ ...s })}
+                  >
+                    <Pencil className="h-4 w-4" />
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-50"
+                    onClick={() => deleteStaff(s.id)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Delete
+                  </button>
+                </div>
+              </td>
+            </tr>
+          ))}
+        </Table>
+
+        {staffEdit ? (
+          <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <div className="text-sm font-bold text-slate-900">Edit staff</div>
+            <div className="mt-3 grid gap-3 sm:grid-cols-3">
+              <label className="block sm:col-span-1">
+                <div className="mb-1 text-xs font-semibold text-slate-700">User ID (auth uid)</div>
+                <input
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none"
+                  value={staffEdit.id ?? ""}
+                  onChange={(e) => setStaffEdit((s) => ({ ...(s ?? {}), id: e.target.value }))}
+                  placeholder="uuid from auth.users"
+                />
+              </label>
+              <label className="block sm:col-span-1">
+                <div className="mb-1 text-xs font-semibold text-slate-700">Full name</div>
+                <input
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none"
+                  value={staffEdit.full_name ?? ""}
+                  onChange={(e) => setStaffEdit((s) => ({ ...(s ?? {}), full_name: e.target.value }))}
+                  placeholder="e.g., Anjali Sharma"
+                />
+              </label>
+              <label className="block sm:col-span-1">
+                <div className="mb-1 text-xs font-semibold text-slate-700">Role</div>
+                <select
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none"
+                  value={staffEdit.role ?? "reception"}
+                  onChange={(e) => setStaffEdit((s) => ({ ...(s ?? {}), role: e.target.value }))}
                 >
-                  Close
-                </button>
-              </div>
-              <div className="p-5">
-                <div className="grid gap-4 sm:grid-cols-2">
-                  {spec.columns.map((c) => {
-                    const k = String(c.key);
-                    const v = (editRow as any)[k];
-                    const disabled = Boolean(c.readOnly);
-
-                    if (c.type === "boolean") {
-                      return (
-                        <label key={k} className="flex items-center gap-3 rounded-xl border border-slate-200 p-3">
-                          <input
-                            type="checkbox"
-                            checked={Boolean(v)}
-                            disabled={disabled}
-                            onChange={(e) => setEditRow((prev) => ({ ...(prev as any), [k]: e.target.checked }))}
-                          />
-                          <span className="text-sm font-semibold text-slate-700">{c.label}</span>
-                        </label>
-                      );
-                    }
-
-                    if (c.type === "select") {
-                      return (
-                        <label key={k} className="block">
-                          <div className="mb-1 text-xs font-semibold text-slate-700">{c.label}{c.required ? " *" : ""}</div>
-                          <select
-                            className={cn(
-                              "w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-teal-200",
-                              disabled && "opacity-60"
-                            )}
-                            value={String(v ?? "")}
-                            disabled={disabled}
-                            onChange={(e) => setEditRow((prev) => ({ ...(prev as any), [k]: e.target.value }))}
-                          >
-                            <option value="">Select…</option>
-                            {(c.options ?? []).map((opt) => (
-                              <option key={opt} value={opt}>
-                                {opt}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                      );
-                    }
-
-                    const inputType = c.type === "number" ? "number" : "text";
-                    return (
-                      <label key={k} className="block">
-                        <div className="mb-1 text-xs font-semibold text-slate-700">{c.label}{c.required ? " *" : ""}</div>
-                        <input
-                          className={cn(
-                            "w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-teal-200",
-                            disabled && "opacity-60"
-                          )}
-                          type={inputType}
-                          value={v === null || v === undefined ? "" : String(v)}
-                          disabled={disabled}
-                          onChange={(e) =>
-                            setEditRow((prev) => ({
-                              ...(prev as any),
-                              [k]: c.type === "number" ? Number(e.target.value) : e.target.value,
-                            }))
-                          }
-                        />
-                      </label>
-                    );
-                  })}
-                </div>
-
-                <div className="mt-6 flex gap-3">
-                  <button
-                    type="button"
-                    onClick={closeEdit}
-                    className="w-1/2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    onClick={saveEdit}
-                    className="w-1/2 rounded-xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white hover:bg-slate-800"
-                  >
-                    Save
-                  </button>
-                </div>
-              </div>
+                  <option value="owner">owner</option>
+                  <option value="reception">reception</option>
+                </select>
+              </label>
+            </div>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button
+                type="button"
+                className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
+                onClick={upsertStaff}
+              >
+                Save
+              </button>
+              <button
+                type="button"
+                className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                onClick={() => setStaffEdit(null)}
+              >
+                Cancel
+              </button>
+            </div>
+            <div className="mt-2 text-xs text-slate-600">
+              Note: User ID must be the auth user UID from Supabase Authentication → Users.
             </div>
           </div>
         ) : null}
-      </div>
-    </div>
+      </Modal>
+
+      <Modal title="Customers" open={openCustomers} onClose={() => setOpenCustomers(false)}>
+        <Toolbar
+          onRefresh={loadCustomers}
+          onAdd={() => setCustEdit({ email: "", full_name: "", phone: "" })}
+          addLabel="Add customer"
+          onExport={() => {
+            const rows = customers.map((c) => ({
+              id: c.id,
+              email: c.email,
+              full_name: c.full_name ?? "",
+              phone: c.phone ?? "",
+              created_at: c.created_at ?? "",
+            }));
+            downloadText("customers.csv", toCsv(rows, ["id", "email", "full_name", "phone", "created_at"])) ;
+          }}
+          onPrint={() => window.print()}
+        />
+        {custError ? <div className="mt-4 text-sm text-red-600">{custError}</div> : null}
+        {custLoading ? <div className="mt-4 text-sm text-slate-600">Loading…</div> : null}
+
+        <Table headers={["Name", "Email", "Phone", "Created", "Actions"]}>
+          {customers.map((c) => (
+            <tr key={c.id} className="border-t border-slate-200">
+              <td className="px-4 py-3 font-semibold text-slate-900">{c.full_name?.trim() ? c.full_name : "—"}</td>
+              <td className="px-4 py-3 text-slate-700">{c.email}</td>
+              <td className="px-4 py-3 text-slate-700">{c.phone ?? "—"}</td>
+              <td className="px-4 py-3 text-xs text-slate-500">{c.created_at ? new Date(c.created_at).toLocaleString() : "—"}</td>
+              <td className="px-4 py-3">
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                    onClick={() => setCustEdit({ ...c })}
+                  >
+                    <Pencil className="h-4 w-4" />
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-50"
+                    onClick={() => deleteCustomer(c.id)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Delete
+                  </button>
+                </div>
+              </td>
+            </tr>
+          ))}
+        </Table>
+
+        {custEdit ? (
+          <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <div className="text-sm font-bold text-slate-900">{custEdit.id ? "Edit customer" : "Add customer"}</div>
+            <div className="mt-3 grid gap-3 sm:grid-cols-3">
+              <label className="block sm:col-span-1">
+                <div className="mb-1 text-xs font-semibold text-slate-700">Email</div>
+                <input
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none"
+                  value={custEdit.email ?? ""}
+                  onChange={(e) => setCustEdit((s) => ({ ...(s ?? {}), email: e.target.value }))}
+                  placeholder="customer@gmail.com"
+                />
+              </label>
+              <label className="block sm:col-span-1">
+                <div className="mb-1 text-xs font-semibold text-slate-700">Full name</div>
+                <input
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none"
+                  value={custEdit.full_name ?? ""}
+                  onChange={(e) => setCustEdit((s) => ({ ...(s ?? {}), full_name: e.target.value }))}
+                  placeholder="Customer name"
+                />
+              </label>
+              <label className="block sm:col-span-1">
+                <div className="mb-1 text-xs font-semibold text-slate-700">Phone</div>
+                <input
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none"
+                  value={custEdit.phone ?? ""}
+                  onChange={(e) => setCustEdit((s) => ({ ...(s ?? {}), phone: e.target.value }))}
+                  placeholder="+91..."
+                />
+              </label>
+            </div>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button
+                type="button"
+                className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
+                onClick={upsertCustomer}
+              >
+                Save
+              </button>
+              <button
+                type="button"
+                className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                onClick={() => setCustEdit(null)}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : null}
+      </Modal>
+
+      <Modal title="Item catalog" open={openCatalog} onClose={() => setOpenCatalog(false)}>
+        <Toolbar
+          onRefresh={loadCatalog}
+          onAdd={() => setCatEdit({ title: "", note: "", price_inr: 0, active: true })}
+          addLabel="Add item"
+          onExport={() => {
+            const rows = catalog.map((i) => ({
+              id: i.id,
+              title: i.title,
+              note: i.note ?? "",
+              price_inr: i.price_inr,
+              active: i.active,
+              created_at: i.created_at ?? "",
+            }));
+            downloadText("catalog_items.csv", toCsv(rows, ["id", "title", "note", "price_inr", "active", "created_at"])) ;
+          }}
+          onPrint={() => window.print()}
+        />
+        {catError ? <div className="mt-4 text-sm text-red-600">{catError}</div> : null}
+        {catLoading ? <div className="mt-4 text-sm text-slate-600">Loading…</div> : null}
+
+        <Table headers={["Title", "Price (INR)", "Active", "Created", "Actions"]}>
+          {catalog.map((i) => (
+            <tr key={i.id} className="border-t border-slate-200">
+              <td className="px-4 py-3">
+                <div className="font-semibold text-slate-900">{i.title}</div>
+                {i.note ? <div className="mt-1 text-xs text-slate-600">{i.note}</div> : null}
+              </td>
+              <td className="px-4 py-3 text-slate-700">₹{i.price_inr}</td>
+              <td className="px-4 py-3">
+                <span className={cn("rounded-full px-2 py-1 text-xs font-semibold", i.active ? "bg-teal-50 text-teal-800" : "bg-slate-100 text-slate-700")}>
+                  {i.active ? "Active" : "Inactive"}
+                </span>
+              </td>
+              <td className="px-4 py-3 text-xs text-slate-500">{i.created_at ? new Date(i.created_at).toLocaleString() : "—"}</td>
+              <td className="px-4 py-3">
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                    onClick={() => setCatEdit({ ...i })}
+                  >
+                    <Pencil className="h-4 w-4" />
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-50"
+                    onClick={() => deleteCatalog(i.id)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Delete
+                  </button>
+                </div>
+              </td>
+            </tr>
+          ))}
+        </Table>
+
+        {catEdit ? (
+          <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <div className="text-sm font-bold text-slate-900">{catEdit.id ? "Edit item" : "Add item"}</div>
+            <div className="mt-3 grid gap-3 sm:grid-cols-4">
+              <label className="block sm:col-span-2">
+                <div className="mb-1 text-xs font-semibold text-slate-700">Title</div>
+                <input
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none"
+                  value={catEdit.title ?? ""}
+                  onChange={(e) => setCatEdit((s) => ({ ...(s ?? {}), title: e.target.value }))}
+                  placeholder="Soft-bristle toothbrush"
+                />
+              </label>
+              <label className="block sm:col-span-1">
+                <div className="mb-1 text-xs font-semibold text-slate-700">Price (INR)</div>
+                <input
+                  type="number"
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none"
+                  value={String(catEdit.price_inr ?? 0)}
+                  onChange={(e) => setCatEdit((s) => ({ ...(s ?? {}), price_inr: Number(e.target.value) }))}
+                />
+              </label>
+              <label className="block sm:col-span-1">
+                <div className="mb-1 text-xs font-semibold text-slate-700">Active</div>
+                <select
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none"
+                  value={catEdit.active ? "true" : "false"}
+                  onChange={(e) => setCatEdit((s) => ({ ...(s ?? {}), active: e.target.value === "true" }))}
+                >
+                  <option value="true">true</option>
+                  <option value="false">false</option>
+                </select>
+              </label>
+              <label className="block sm:col-span-4">
+                <div className="mb-1 text-xs font-semibold text-slate-700">Note</div>
+                <input
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none"
+                  value={catEdit.note ?? ""}
+                  onChange={(e) => setCatEdit((s) => ({ ...(s ?? {}), note: e.target.value }))}
+                  placeholder="Short description"
+                />
+              </label>
+            </div>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button
+                type="button"
+                className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
+                onClick={upsertCatalog}
+              >
+                Save
+              </button>
+              <button
+                type="button"
+                className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                onClick={() => setCatEdit(null)}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : null}
+      </Modal>
+    </main>
   );
 }
