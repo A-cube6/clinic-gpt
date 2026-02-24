@@ -1,29 +1,30 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 
-export default function AdminLoginClient() {
+export default function StaffLoginClient() {
   const supabase = useMemo(() => createSupabaseBrowserClient(), []);
   const router = useRouter();
   const sp = useSearchParams();
 
-  const nextPath = sp.get("next") || "/admin";
+  const nextPath = sp.get("next") || "/staff";
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [msg, setMsg] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [resetEmail, setResetEmail] = useState("");
-const [resetMsg, setResetMsg] = useState<string | null>(null);
 
   const signIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setMsg(null);
 
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { error } = await supabase.auth.signInWithPassword({
+      email: email.trim(),
+      password,
+    });
 
     setLoading(false);
 
@@ -32,33 +33,35 @@ const [resetMsg, setResetMsg] = useState<string | null>(null);
       return;
     }
 
-    router.push(nextPath);
+    // Decide route based on role
+    const { data: u } = await supabase.auth.getUser();
+    const uid = u.user?.id;
+
+    if (!uid) {
+      router.push("/staff/login");
+      return;
+    }
+
+    const { data: staff } = await supabase
+      .from("staff_profiles")
+      .select("role")
+      .eq("id", uid)
+      .maybeSingle();
+
+    const role = staff?.role;
+
+    if (role === "owner") router.push("/admin");
+    else if (role === "reception") router.push(nextPath);
+    else {
+      setMsg("Access denied. This account is not staff.");
+      await supabase.auth.signOut();
+    }
   };
-
-  const sendReset = async () => {
-  setResetMsg(null);
-
-  if (!email.trim()) {
-    setResetMsg("Enter your email above first.");
-    return;
-  }
-
-  const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-    redirectTo: `${window.location.origin}/reset-password`,
-  });
-
-  if (error) {
-    setResetMsg(error.message);
-    return;
-  }
-
-  setResetMsg("Password reset link sent. Check your email.");
-};
 
   return (
     <main className="mx-auto max-w-md px-4 py-14">
-      <h1 className="text-2xl font-bold text-slate-900">Admin login</h1>
-      <p className="mt-2 text-sm text-slate-600">Owner / Reception access only.</p>
+      <h1 className="text-2xl font-bold text-slate-900">Staff login</h1>
+      <p className="mt-2 text-sm text-slate-600">Reception access.</p>
 
       <form
         onSubmit={signIn}
@@ -71,7 +74,6 @@ const [resetMsg, setResetMsg] = useState<string | null>(null);
             className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-teal-200"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            placeholder="admin@gmail.com"
             required
           />
         </label>
@@ -83,7 +85,6 @@ const [resetMsg, setResetMsg] = useState<string | null>(null);
             className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-teal-200"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            placeholder="••••••••"
             required
           />
         </label>
@@ -93,26 +94,11 @@ const [resetMsg, setResetMsg] = useState<string | null>(null);
           disabled={loading}
           className="w-full rounded-xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-60"
         >
-          {loading ? "Signing in..." : "Sign in"}
+          {loading ? "Signing in…" : "Sign in"}
         </button>
 
         {msg ? <div className="text-sm text-red-600">{msg}</div> : null}
-
-     <button
-  type="button"
-  onClick={sendReset}
-  className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
->
-  Forgot password? Send reset link
-</button>
-
-{resetMsg ? <div className="text-sm text-slate-700">{resetMsg}</div> : null}
-
       </form>
-
-      <p className="mt-4 text-xs text-slate-500">
-        If you don’t have access, ask the clinic owner to add your role in <code>staff_profiles</code>.
-      </p>
     </main>
   );
 }

@@ -35,6 +35,9 @@ export async function middleware(request: NextRequest) {
   const isAdminRoute = pathname === "/admin" || pathname.startsWith("/admin/");
   const isAdminLogin = pathname === "/admin/login";
 
+  const isStaffRoute = pathname === "/staff" || pathname.startsWith("/staff/");
+const isStaffLogin = pathname === "/staff/login";
+
   if (isAdminRoute && !isAdminLogin) {
     if (!data.user) {
       const url = request.nextUrl.clone();
@@ -43,6 +46,13 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(url);
     }
   }
+
+  if (isStaffRoute && !isStaffLogin && !data.user) {
+  const url = request.nextUrl.clone();
+  url.pathname = "/staff/login";
+  url.searchParams.set("next", pathname);
+  return NextResponse.redirect(url);
+}
 
   return response;
 }

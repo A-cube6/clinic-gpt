@@ -1,10 +1,10 @@
 import { Suspense } from "react";
-import ResetPasswordClient from "./ResetPasswordClient";
+import StaffLoginClient from "./StaffLoginClient";
 
 export default function Page() {
-  return (    
+  return (
     <Suspense>
-      <ResetPasswordClient />
+      <StaffLoginClient />
     </Suspense>
   );
 }
