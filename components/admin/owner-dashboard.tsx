@@ -11,6 +11,7 @@ import {
   Users,
   Package,
   UserRound,
+  Stethoscope,
   X,
   RefreshCw,
 } from "lucide-react";
@@ -18,6 +19,19 @@ import {
 type StaffRow = { id: string; role: string; full_name?: string | null };
 type CustomerRow = { id: string; email: string; full_name?: string | null; phone?: string | null; created_at?: string | null };
 type CatalogRow = { id: string; title: string; note?: string | null; price_inr: number; active: boolean; created_at?: string | null };
+type DoctorRow = {
+  id: string;
+  name: string;
+  phone?: string | null;
+  qualifications?: string | null;
+  speciality?: string | null;
+  experience?: string | null;
+  timings ?: string | null;
+  start_date?: string | null;
+  end_date?: string | null;
+  active: boolean;
+  created_at?: string | null;
+};
 
 function cn(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");
@@ -208,6 +222,7 @@ export default function OwnerDashboard() {
   const [openStaff, setOpenStaff] = useState(false);
   const [openCustomers, setOpenCustomers] = useState(false);
   const [openCatalog, setOpenCatalog] = useState(false);
+  const [openDoctors, setOpenDoctors] = useState(false);
 
   // --- STAFF ---
   const [staff, setStaff] = useState<StaffRow[]>([]);
@@ -342,6 +357,54 @@ export default function OwnerDashboard() {
     await loadCatalog();
   };
 
+  // --- DOCTORS ---
+  const [doctors, setDoctors] = useState<DoctorRow[]>([]);
+  const [docLoading, setDocLoading] = useState(false);
+  const [docError, setDocError] = useState<string | null>(null);
+  const [docEdit, setDocEdit] = useState<Partial<DoctorRow> | null>(null);
+
+  const loadDoctors = async () => {
+    setDocLoading(true);
+    setDocError(null);
+    const { data, error } = await supabase
+      .from("doctors")
+      .select("id, name, phone, qualifications, start_date, end_date, active, created_at")
+      .order("created_at", { ascending: false });
+    if (error) setDocError(error.message);
+    setDoctors((data ?? []) as DoctorRow[]);
+    setDocLoading(false);
+  };
+
+  const upsertDoctor = async () => {
+    if (!docEdit?.name?.trim()) return;
+    if (!confirm("Save this doctor?")) return;
+
+    const payload: any = {
+      name: docEdit.name.trim(),
+      phone: docEdit.phone ?? null,
+      qualifications: docEdit.qualifications ?? null,
+      start_date: docEdit.start_date ?? null,
+      end_date: docEdit.end_date ?? null,
+      active: !!docEdit.active,
+    };
+    if (docEdit.id) payload.id = docEdit.id;
+
+    const { error } = await supabase.from("doctors").upsert(payload);
+    if (error) {
+      alert(error.message);
+      return;
+    }
+    setDocEdit(null);
+    await loadDoctors();
+  };
+
+  const deleteDoctor = async (id: string) => {
+    if (!confirm("Delete this doctor? This cannot be undone.")) return;
+    const { error } = await supabase.from("doctors").delete().eq("id", id);
+    if (error) alert(error.message);
+    await loadDoctors();
+  };
+
   useEffect(() => {
     if (openStaff) loadStaff();
   }, [openStaff]);
@@ -351,6 +414,9 @@ export default function OwnerDashboard() {
   useEffect(() => {
     if (openCatalog) loadCatalog();
   }, [openCatalog]);
+  useEffect(() => {
+    if (openDoctors) loadDoctors();
+  }, [openDoctors]);
 
   return (
     <main className="mx-auto max-w-6xl px-4 py-14">
@@ -361,13 +427,20 @@ export default function OwnerDashboard() {
         </div>
       </div>
 
-      <div className="mt-8 grid gap-4 md:grid-cols-3">
+      <div className="mt-8 grid gap-4 md:grid-cols-2">
         <CardShell
           icon={<Users className="h-5 w-5" />}
           title="Staff"
           desc="Owner can edit roles & names."
           cta="Manage"
           onOpen={() => setOpenStaff(true)}
+        />
+        <CardShell
+          icon={<Stethoscope className="h-5 w-5" />}
+          title="Doctors"
+          desc="Doctor panel shown on homepage."
+          cta="Manage"
+          onOpen={() => setOpenDoctors(true)}
         />
         <CardShell
           icon={<UserRound className="h-5 w-5" />}
@@ -587,6 +660,155 @@ export default function OwnerDashboard() {
                 type="button"
                 className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
                 onClick={() => setCustEdit(null)}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : null}
+      </Modal>
+
+      <Modal title="Doctors" open={openDoctors} onClose={() => setOpenDoctors(false)}>
+        <Toolbar
+          onRefresh={loadDoctors}
+          onAdd={() =>
+            setDocEdit({
+              name: "",
+              phone: "",
+              qualifications: "",
+              start_date: null,
+              end_date: null,
+              active: true,
+            })
+          }
+          addLabel="Add doctor"
+          onExport={() => {
+            const rows = doctors.map((d) => ({
+              id: d.id,
+              name: d.name,
+              phone: d.phone ?? "",
+              qualifications: d.qualifications ?? "",
+              
+              start_date: d.start_date ?? "",
+              end_date: d.end_date ?? "",
+              active: d.active,
+              created_at: d.created_at ?? "",
+            }));
+            downloadText(
+              "doctors.csv",
+              toCsv(rows, ["id", "full_name", "phone", "qualifications", "start_date", "end_date", "active", "created_at"])
+            );
+          }}
+          onPrint={() => window.print()}
+        />
+
+        {docError ? <div className="mt-4 text-sm text-red-600">{docError}</div> : null}
+        {docLoading ? <div className="mt-4 text-sm text-slate-600">Loading…</div> : null}
+
+        <Table headers={["Name", "Phone", "Qualifications", "Start", "End", "Active", "Actions"]}>
+          {doctors.map((d) => (
+            <tr key={d.id} className="border-t border-slate-200">
+              <td className="px-4 py-3 font-semibold text-slate-900">{d.name}</td>
+              <td className="px-4 py-3 text-slate-700">{d.phone ?? "—"}</td>
+              <td className="px-4 py-3 text-slate-700">{d.qualifications ?? "—"}</td>
+              <td className="px-4 py-3 text-slate-700">{d.start_date ?? "—"}</td>
+              <td className="px-4 py-3 text-slate-700">{d.end_date ?? "—"}</td>
+              <td className="px-4 py-3 text-slate-700">{d.active ? "Yes" : "No"}</td>
+              <td className="px-4 py-3">
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                    onClick={() => setDocEdit({ ...d })}
+                  >
+                    <Pencil className="h-4 w-4" />
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-50"
+                    onClick={() => deleteDoctor(d.id)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Delete
+                  </button>
+                </div>
+              </td>
+            </tr>
+          ))}
+        </Table>
+
+        {docEdit ? (
+          <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <div className="text-sm font-bold text-slate-900">Edit doctor</div>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <label className="block">
+                <div className="mb-1 text-xs font-semibold text-slate-700">Name</div>
+                <input
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none"
+                  value={docEdit.name ?? ""}
+                  onChange={(e) => setDocEdit((s) => ({ ...(s ?? {}), name: e.target.value }))}
+                  placeholder="Dr. Name"
+                />
+              </label>
+              <label className="block">
+                <div className="mb-1 text-xs font-semibold text-slate-700">Phone</div>
+                <input
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none"
+                  value={docEdit.phone ?? ""}
+                  onChange={(e) => setDocEdit((s) => ({ ...(s ?? {}), phone: e.target.value }))}
+                  placeholder="+91…"
+                />
+              </label>
+              <label className="block sm:col-span-2">
+                <div className="mb-1 text-xs font-semibold text-slate-700">Qualifications</div>
+                <input
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none"
+                  value={docEdit.qualifications ?? ""}
+                  onChange={(e) => setDocEdit((s) => ({ ...(s ?? {}), qualifications: e.target.value }))}
+                  placeholder="BDS / MDS…"
+                />
+              </label>
+              <label className="block">
+                <div className="mb-1 text-xs font-semibold text-slate-700">Start date</div>
+                <input
+                  type="date"
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none"
+                  value={docEdit.start_date ?? ""}
+                  onChange={(e) => setDocEdit((s) => ({ ...(s ?? {}), start_date: e.target.value || null }))}
+                />
+              </label>
+              <label className="block">
+                <div className="mb-1 text-xs font-semibold text-slate-700">End date</div>
+                <input
+                  type="date"
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none"
+                  value={docEdit.end_date ?? ""}
+                  onChange={(e) => setDocEdit((s) => ({ ...(s ?? {}), end_date: e.target.value || null }))}
+                />
+              </label>
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={!!docEdit.active}
+                  onChange={(e) => setDocEdit((s) => ({ ...(s ?? {}), active: e.target.checked }))}
+                />
+                <span className="text-sm font-semibold text-slate-700">Active</span>
+              </label>
+            </div>
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button
+                type="button"
+                className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
+                onClick={upsertDoctor}
+              >
+                Save
+              </button>
+              <button
+                type="button"
+                className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                onClick={() => setDocEdit(null)}
               >
                 Cancel
               </button>

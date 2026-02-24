@@ -21,6 +21,7 @@ import {
   MessageCircle,
   Phone,
 } from "lucide-react";
+import DoctorsFromSupabase from "@/components/home/doctors-from-supabase";
 
 /**
  * Smile & Care Dental Clinic — Prototype
@@ -640,34 +641,13 @@ export default function Page() {
             title="Friendly experts, clear communication"
             desc="Add your real doctors here. Keep it simple: degree, specialty, experience, and clinic timings."
           />
-
-          <div className="mt-10 grid grid-cols-1 gap-4 md:grid-cols-3">
-            {[1, 2, 3].map((i) => (
-              <Card key={i}>
-                <div className="flex items-center gap-4">
-                  <div className="h-14 w-14 rounded-2xl bg-slate-200" />
-                  <div>
-                    <div className="text-sm font-semibold">Dr. Placeholder {i}</div>
-                    <div className="text-xs text-slate-500">BDS / MDS • Specialty</div>
-                    <div className="mt-1 text-xs text-slate-500">8+ years experience</div>
-                  </div>
-                </div>
-                <div className="mt-4 flex gap-2">
-                  <a
-                    href="#book"
-                    onClick={(e) => scrollToId(e, "book")}
-                    className={cn(BTN.base, BTN.primary, BTN.small, "flex-1")}
-                  >
-                    Consult
-                    <ChevronRight className="h-4 w-4 opacity-90" />
-                  </a>
-                  <WhatsAppLink className={cn(BTN.base, BTN.whatsapp, BTN.small, "flex-1")}>
-                    <MessageCircle className="h-4 w-4" />
-                    WhatsApp
-                  </WhatsAppLink>
-                </div>
-              </Card>
-            ))}
+          <div className="mt-10">
+            <DoctorsFromSupabase
+              scrollToId={scrollToId}
+              cn={cn}
+              BTN={BTN}
+              WhatsAppLink={WhatsAppLink}
+            />
           </div>
         </div>
       </section>      {/* Shop */}
