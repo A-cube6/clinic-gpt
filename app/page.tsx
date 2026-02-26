@@ -20,6 +20,7 @@ import {
   X,
   MessageCircle,
   Phone,
+  Search,
 } from "lucide-react";
 import DoctorsFromSupabase from "@/components/home/doctors-from-supabase";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
@@ -143,6 +144,54 @@ function Badge({ children }: { children: React.ReactNode }) {
 }
 
 
+
+function ShopCard({
+  children,
+  className,
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <div
+      className={cn(
+        "rounded-2xl border border-slate-200 bg-white/80 p-4 shadow-sm backdrop-blur transition-all duration-200 hover:shadow-md",
+        className
+      )}
+    >
+      {children}
+    </div>
+  );
+}
+
+function ChipToggle({
+  active,
+  label,
+  onClick,
+}: {
+  active: boolean;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold shadow-sm transition",
+        active
+          ? "border-teal-200 bg-teal-50 text-teal-900"
+          : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+      )}
+      aria-pressed={active}
+    >
+      <span>{label}</span>
+      {active ? <X className="h-3.5 w-3.5 opacity-70" /> : null}
+    </button>
+  );
+}
+
+
 function FAQItem({ q, a }: { q: string; a: string }) {
   const [open, setOpen] = useState(false);
   return (
@@ -260,6 +309,15 @@ export default function Page() {
     city: "Kalyani",
     pinCode: "",
   });
+
+
+  // Shop UI (search/sort/filter)
+  type ShopSort = "featured" | "price_asc" | "price_desc" | "discount_desc" | "title_asc";
+  const [shopQuery, setShopQuery] = useState("");
+  const [shopSort, setShopSort] = useState<ShopSort>("featured");
+  const [shopOnlyInStock, setShopOnlyInStock] = useState(false);
+  const [shopOnlyDiscounted, setShopOnlyDiscounted] = useState(false);
+  const [shopFiltersOpen, setShopFiltersOpen] = useState(false);
 
   const fabRef = useRef<HTMLDivElement | null>(null);
 
@@ -385,6 +443,48 @@ export default function Page() {
   const subTotal = useMemo(() => cartLines.reduce((a, l) => a + l.lineTotal, 0), [cartLines]);
   const shipping = useMemo(() => (subTotal > 499 ? 0 : subTotal > 0 ? 49 : 0), [subTotal]);
   const grandTotal = useMemo(() => subTotal + shipping, [subTotal, shipping]);
+
+
+  const shopResults = useMemo(() => {
+    const q = shopQuery.trim().toLowerCase();
+    let list = products.slice();
+
+    if (q) {
+      list = list.filter((p) => {
+        const t = (p.title ?? "").toLowerCase();
+        const n = (p.note ?? "").toLowerCase();
+        return t.includes(q) || n.includes(q);
+      });
+    }
+
+    if (shopOnlyInStock) list = list.filter((p) => (p.stock ?? 0) > 0);
+
+    if (shopOnlyDiscounted)
+      list = list.filter((p) => (p.discountInr ?? 0) > 0 || (p.discountPct ?? 0) > 0);
+
+    const discountPctOf = (p: Product) => {
+      const mrp = p.mrpInr ?? 0;
+      if (mrp <= 0) return 0;
+      if ((p.discountPct ?? 0) > 0) return p.discountPct;
+      const disc = p.discountInr ?? 0;
+      return Math.round(((disc / mrp) * 100) * 100) / 100;
+    };
+
+    if (shopSort === "price_asc") list.sort((a, b) => a.priceInr - b.priceInr || a.title.localeCompare(b.title));
+    if (shopSort === "price_desc") list.sort((a, b) => b.priceInr - a.priceInr || a.title.localeCompare(b.title));
+    if (shopSort === "discount_desc")
+      list.sort(
+        (a, b) =>
+          discountPctOf(b) - discountPctOf(a) ||
+          (b.discountInr ?? 0) - (a.discountInr ?? 0) ||
+          a.priceInr - b.priceInr
+      );
+    if (shopSort === "title_asc") list.sort((a, b) => a.title.localeCompare(b.title));
+
+    return list;
+  }, [products, shopQuery, shopOnlyInStock, shopOnlyDiscounted, shopSort]);
+
+  const shopHasActiveFilters = shopOnlyInStock || shopOnlyDiscounted || !!shopQuery.trim();
 
   const addToCart = (productId: string) => {
   const p = products.find((x) => x.id === productId);
@@ -764,7 +864,9 @@ export default function Page() {
             />
           </div>
         </div>
-      </section>      {/* Shop */}
+      </section>
+
+      {/* Shop */}
       <section id="shop" className="bg-white">
         <div className="mx-auto max-w-6xl px-4 py-14">
           <SectionHeading
@@ -781,58 +883,237 @@ export default function Page() {
             </div>
           </div>
 
-          <div className="mt-10 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {products.map((p) => (
-              <Card key={p.id}>
-                <div className="h-36 overflow-hidden rounded-2xl bg-slate-100">
-                  {p.photoUrl ? (
-                    <img src={p.photoUrl} alt={p.title} className="h-full w-full object-cover" />
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center text-xs font-semibold text-slate-400">
-                      No photo
-                    </div>
-                  )}
-                </div>
-                <div className="mt-4 text-sm font-semibold">{p.title}</div>
-                <div className="mt-1 text-sm text-slate-600">{p.note}</div>
-                <div className="mt-3 flex items-center justify-between gap-3">
-                  <div className="text-sm">
-                    <div className="font-semibold">{formatInr(p.priceInr)}</div>
-                    {p.discountInr > 0 || p.discountPct > 0 ? (
-                      <div className="text-xs text-red-600 line-through">{formatInr(p.mrpInr)}</div>
-                    ) : (
-                      <div className="text-xs text-slate-500">MRP {formatInr(p.mrpInr)}</div>
-                    )}
+          {/* Search + Sort */}
+          <div className="mt-8">
+            <div className="flex flex-col gap-3 md:flex-row md:items-center">
+              <div className="relative flex-1">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <input
+                  value={shopQuery}
+                  onChange={(e) => setShopQuery(e.target.value)}
+                  placeholder="Search products (title or notes)…"
+                  className="w-full rounded-xl border border-slate-200 bg-white py-3 pl-10 pr-4 text-sm outline-none focus:ring-2 focus:ring-teal-200"
+                />
+              </div>
 
-                    {p.discountInr > 0 || p.discountPct > 0 ? (
-                      <div className="mt-1 text-xs font-semibold text-red-700">
-                        Save {formatInr(p.discountInr)}
-                        {p.discountPct > 0 ? ` (${p.discountPct}%)` : ""}
-                      </div>
-                    ) : null}
+              <div className="flex items-center gap-3">
+                <select
+                  value={shopSort}
+                  onChange={(e) => setShopSort(e.target.value as any)}
+                  className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-teal-200 md:w-56"
+                >
+                  <option value="featured">Featured</option>
+                  <option value="price_asc">Price: Low → High</option>
+                  <option value="price_desc">Price: High → Low</option>
+                  <option value="discount_desc">Discount: High → Low</option>
+                  <option value="title_asc">Title: A → Z</option>
+                </select>
 
-                    <div className={cn("text-xs", p.stock > 0 ? "text-slate-600" : "text-rose-700")}>
-                      {p.stock > 0 ? `${p.stock} in stock` : "Out of stock"}
-                    </div>
-                  </div>
-                  <button
-                    className={cn(
-                      BTN.base,
-                      BTN.outline,
-                      BTN.small,
-                      "rounded-xl px-3 py-2",
-                      p.stock <= 0 && "cursor-not-allowed opacity-50"
-                    )}
-                    onClick={() => addToCart(p.id)}
-                    disabled={p.stock <= 0}
-                  >
-                    <ShoppingBag className="h-4 w-4" />
-                    Add
-                  </button>
-                </div>
-              </Card>
-            ))}
+                <button
+                  type="button"
+                  className={cn(BTN.base, BTN.outline, BTN.small, "md:hidden")}
+                  onClick={() => setShopFiltersOpen(true)}
+                >
+                  Filters
+                </button>
+              </div>
+            </div>
+
+            {/* Desktop filter chips */}
+            <div className="mt-3 hidden flex-wrap items-center gap-2 md:flex">
+              <ChipToggle
+                active={shopOnlyInStock}
+                label="In stock"
+                onClick={() => setShopOnlyInStock((v) => !v)}
+              />
+              <ChipToggle
+                active={shopOnlyDiscounted}
+                label="Discounted"
+                onClick={() => setShopOnlyDiscounted((v) => !v)}
+              />
+              {shopHasActiveFilters ? (
+                <button
+                  type="button"
+                  className="text-xs font-semibold text-slate-600 hover:text-slate-900"
+                  onClick={() => {
+                    setShopQuery("");
+                    setShopOnlyInStock(false);
+                    setShopOnlyDiscounted(false);
+                    setShopSort("featured");
+                  }}
+                >
+                  Clear
+                </button>
+              ) : null}
+            </div>
+
+            {/* Mobile active filter chips */}
+            <div className="mt-3 flex flex-wrap items-center gap-2 md:hidden">
+              {shopOnlyInStock ? (
+                <ChipToggle active label="In stock" onClick={() => setShopOnlyInStock(false)} />
+              ) : null}
+              {shopOnlyDiscounted ? (
+                <ChipToggle active label="Discounted" onClick={() => setShopOnlyDiscounted(false)} />
+              ) : null}
+              {shopHasActiveFilters ? (
+                <button
+                  type="button"
+                  className="text-xs font-semibold text-slate-600 hover:text-slate-900"
+                  onClick={() => {
+                    setShopQuery("");
+                    setShopOnlyInStock(false);
+                    setShopOnlyDiscounted(false);
+                    setShopSort("featured");
+                  }}
+                >
+                  Clear
+                </button>
+              ) : null}
+            </div>
+
+            <div className="mt-2 text-xs text-slate-600">
+              Showing <b>{shopResults.length}</b> item{shopResults.length === 1 ? "" : "s"}
+            </div>
           </div>
+
+          {/* Products */}
+          {shopResults.length === 0 ? (
+            <div className="mt-8 rounded-2xl border border-slate-200 bg-slate-50 p-6 text-sm text-slate-700">
+              No products match your search/filters.
+            </div>
+          ) : (
+            <>
+              {/* Desktop: one-row horizontal shop strip */}
+              <div className="mt-6 hidden md:block">
+                <div className="-mx-2 flex snap-x snap-mandatory gap-4 overflow-x-auto px-2 pb-3">
+                  {shopResults.map((p) => {
+                    const discounted = (p.discountInr ?? 0) > 0 || (p.discountPct ?? 0) > 0;
+                    return (
+                      <ShopCard key={p.id} className="w-64 shrink-0 snap-start">
+                        <div className="h-28 overflow-hidden rounded-2xl bg-slate-100">
+                          {p.photoUrl ? (
+                            <img src={p.photoUrl} alt={p.title} className="h-full w-full object-cover" />
+                          ) : (
+                            <div className="flex h-full w-full items-center justify-center text-xs font-semibold text-slate-400">
+                              No photo
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="mt-3 text-sm font-semibold text-slate-900">{p.title}</div>
+                        <div className="mt-1 truncate text-xs text-slate-600">{p.note}</div>
+
+                        <div className="mt-3 flex items-center justify-between gap-3">
+                          <div className="text-sm">
+                            <div className="font-semibold text-slate-900">{formatInr(p.priceInr)}</div>
+
+                            {discounted ? (
+                              <div className="text-xs text-red-600 line-through">{formatInr(p.mrpInr)}</div>
+                            ) : (
+                              <div className="text-xs text-slate-500">MRP {formatInr(p.mrpInr)}</div>
+                            )}
+
+                            {discounted ? (
+                              <div className="mt-1 text-xs font-semibold text-red-700">
+                                Save {formatInr(p.discountInr)}
+                                {p.discountPct > 0 ? ` (${p.discountPct}%)` : ""}
+                              </div>
+                            ) : null}
+
+                            <div className={cn("mt-1 text-xs", p.stock > 0 ? "text-slate-600" : "text-rose-700")}>
+                              {p.stock > 0 ? `${p.stock} in stock` : "Out of stock"}
+                            </div>
+                          </div>
+
+                          <button
+                            className={cn(
+                              BTN.base,
+                              BTN.outline,
+                              BTN.small,
+                              "rounded-xl px-3 py-2",
+                              p.stock <= 0 && "cursor-not-allowed opacity-50"
+                            )}
+                            onClick={() => addToCart(p.id)}
+                            disabled={p.stock <= 0}
+                          >
+                            <ShoppingBag className="h-4 w-4" />
+                            Add
+                          </button>
+                        </div>
+                      </ShopCard>
+                    );
+                  })}
+                </div>
+                <div className="mt-1 text-xs text-slate-500">Tip: scroll horizontally to see more items.</div>
+              </div>
+
+              {/* Mobile: compact list */}
+              <div className="mt-6 space-y-3 md:hidden">
+                {shopResults.map((p) => {
+                  const discounted = (p.discountInr ?? 0) > 0 || (p.discountPct ?? 0) > 0;
+                  return (
+                    <ShopCard key={p.id} className="p-3">
+                      <div className="flex gap-3">
+                        <div className="h-16 w-16 shrink-0 overflow-hidden rounded-xl bg-slate-100">
+                          {p.photoUrl ? (
+                            <img src={p.photoUrl} alt={p.title} className="h-full w-full object-cover" />
+                          ) : (
+                            <div className="flex h-full w-full items-center justify-center text-[10px] font-semibold text-slate-400">
+                              No photo
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <div className="truncate text-sm font-semibold text-slate-900">{p.title}</div>
+                              <div className="mt-0.5 truncate text-xs text-slate-600">{p.note}</div>
+                            </div>
+
+                            <button
+                              className={cn(
+                                BTN.base,
+                                BTN.outline,
+                                "rounded-xl px-3 py-2 text-xs",
+                                p.stock <= 0 && "cursor-not-allowed opacity-50"
+                              )}
+                              onClick={() => addToCart(p.id)}
+                              disabled={p.stock <= 0}
+                            >
+                              <ShoppingBag className="h-4 w-4" />
+                              Add
+                            </button>
+                          </div>
+
+                          <div className="mt-2 flex items-end justify-between gap-3">
+                            <div className="text-xs">
+                              <div className="text-sm font-semibold text-slate-900">{formatInr(p.priceInr)}</div>
+                              {discounted ? (
+                                <div className="text-xs text-red-600 line-through">{formatInr(p.mrpInr)}</div>
+                              ) : (
+                                <div className="text-xs text-slate-500">MRP {formatInr(p.mrpInr)}</div>
+                              )}
+                              {discounted ? (
+                                <div className="mt-1 text-xs font-semibold text-red-700">
+                                  Save {formatInr(p.discountInr)}
+                                  {p.discountPct > 0 ? ` (${p.discountPct}%)` : ""}
+                                </div>
+                              ) : null}
+                            </div>
+
+                            <div className={cn("text-xs", p.stock > 0 ? "text-slate-600" : "text-rose-700")}>
+                              {p.stock > 0 ? `${p.stock} in stock` : "Out of stock"}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </ShopCard>
+                  );
+                })}
+              </div>
+            </>
+          )}
 
           {!catalogReady ? (
             <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
@@ -857,10 +1138,68 @@ export default function Page() {
             <div className="text-sm text-slate-600">Free shipping above ₹499. Otherwise ₹49.</div>
           </div>
         </div>
+
+        {/* Mobile filter drawer */}
+        {shopFiltersOpen ? (
+          <div className="fixed inset-0 z-50 md:hidden">
+            <div className="absolute inset-0 bg-black/30" onClick={() => setShopFiltersOpen(false)} />
+            <div className="absolute bottom-0 left-0 right-0 max-h-[85vh] overflow-y-auto rounded-t-3xl bg-white p-5 shadow-2xl">
+              <div className="flex items-center justify-between">
+                <div className="text-sm font-semibold text-slate-900">Filters</div>
+                <button
+                  type="button"
+                  className="rounded-xl border border-slate-200 bg-white p-2 text-slate-700 shadow-sm hover:bg-slate-50"
+                  onClick={() => setShopFiltersOpen(false)}
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              <div className="mt-5 space-y-4">
+                <label className="flex items-center gap-3 text-sm text-slate-800">
+                  <input
+                    type="checkbox"
+                    checked={shopOnlyInStock}
+                    onChange={(e) => setShopOnlyInStock(e.target.checked)}
+                    className="h-4 w-4 rounded border-slate-300 text-teal-600"
+                  />
+                  In stock only
+                </label>
+
+                <label className="flex items-center gap-3 text-sm text-slate-800">
+                  <input
+                    type="checkbox"
+                    checked={shopOnlyDiscounted}
+                    onChange={(e) => setShopOnlyDiscounted(e.target.checked)}
+                    className="h-4 w-4 rounded border-slate-300 text-teal-600"
+                  />
+                  Discounted
+                </label>
+              </div>
+
+              <div className="mt-6 flex items-center gap-3">
+                <button
+                  type="button"
+                  className={cn(BTN.base, BTN.outline, "flex-1")}
+                  onClick={() => {
+                    setShopQuery("");
+                    setShopOnlyInStock(false);
+                    setShopOnlyDiscounted(false);
+                    setShopSort("featured");
+                  }}
+                >
+                  Clear
+                </button>
+                <button type="button" className={cn(BTN.base, BTN.primary, "flex-1")} onClick={() => setShopFiltersOpen(false)}>
+                  Done
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
       </section>
 
-
-      {/* Reviews (placeholder id preserved) */}
+{/* Reviews (placeholder id preserved) */}
       <section id="reviews" className="py-16 md:py-20">
         <div className="mx-auto w-full max-w-6xl px-4 sm:px-6">
           <SectionHeading eyebrow="Trust" title="Patient Reviews" desc="We can embed Google reviews or curated testimonials later." />

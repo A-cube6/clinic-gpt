@@ -356,6 +356,9 @@ export default function OwnerDashboard() {
   const [catError, setCatError] = useState<string | null>(null);
   const [catEdit, setCatEdit] = useState<Partial<CatalogRow> | null>(null);
 
+  const [catSaving, setCatSaving] = useState(false);
+  const [catSaveError, setCatSaveError] = useState<string | null>(null);
+
   const loadCatalog = async () => {
     setCatLoading(true);
     setCatError(null);
@@ -368,30 +371,49 @@ export default function OwnerDashboard() {
     setCatLoading(false);
   };
 
-  const upsertCatalog = async () => {
-    if (!catEdit?.title) return;
-    if (!confirm("Save this catalog item?")) return;
-
-    const payload: any = {
-      title: catEdit.title.trim(),
-      note: catEdit.note ?? null,
-      mrp_inr: Number.isFinite(Number(catEdit.mrp_inr)) ? Number(catEdit.mrp_inr) : 0,
-      discount_inr: Number.isFinite(Number(catEdit.discount_inr)) ? Number(catEdit.discount_inr) : 0,
-      discount_pct: Number.isFinite(Number(catEdit.discount_pct)) ? Number(catEdit.discount_pct) : 0,
-      purchase_price_inr: Number.isFinite(Number(catEdit.purchase_price_inr)) ? Number(catEdit.purchase_price_inr) : 0,
-      stock: Number.isFinite(Number(catEdit.stock)) ? Number(catEdit.stock) : 0,
-      photo_url: catEdit.photo_url ? String(catEdit.photo_url).trim() : null,
-      active: !!catEdit.active,
-    };
-    if (catEdit.id) payload.id = catEdit.id;
-
-    const { error } = await supabase.from("catalog_items").upsert(payload);
-    if (error) {
-      alert(error.message);
+    const upsertCatalog = async () => {
+    const title = String(catEdit?.title ?? "").trim();
+    if (!title) {
+      setCatSaveError("Title is required.");
       return;
     }
-    setCatEdit(null);
-    await loadCatalog();
+
+    setCatSaving(true);
+    setCatSaveError(null);
+
+    const payload: any = {
+      title,
+      note: catEdit?.note ?? null,
+      mrp_inr: Number.isFinite(Number(catEdit?.mrp_inr)) ? Number(catEdit?.mrp_inr) : 0,
+      discount_inr: Number.isFinite(Number(catEdit?.discount_inr)) ? Number(catEdit?.discount_inr) : 0,
+      discount_pct: Number.isFinite(Number(catEdit?.discount_pct)) ? Number(catEdit?.discount_pct) : 0,
+      purchase_price_inr: Number.isFinite(Number(catEdit?.purchase_price_inr)) ? Number(catEdit?.purchase_price_inr) : 0,
+      stock: Number.isFinite(Number(catEdit?.stock)) ? Number(catEdit?.stock) : 0,
+      photo_url: catEdit?.photo_url ? String(catEdit.photo_url).trim() : null,
+      active: !!catEdit?.active,
+    };
+
+    try {
+      let error: any = null;
+
+      if (catEdit?.id) {
+        const res = await supabase.from("catalog_items").update(payload).eq("id", catEdit.id);
+        error = res.error;
+      } else {
+        const res = await supabase.from("catalog_items").insert(payload);
+        error = res.error;
+      }
+
+      if (error) {
+        setCatSaveError(error.message ?? "Failed to save catalog item.");
+        return;
+      }
+
+      setCatEdit(null); // close edit panel
+      await loadCatalog();
+    } finally {
+      setCatSaving(false);
+    }
   };
 
   const deleteCatalog = async (id: string) => {
@@ -802,6 +824,7 @@ export default function OwnerDashboard() {
                 </select>
               </label>
             </div>
+            {catSaveError ? <div className="mt-3 text-sm text-red-600">{catSaveError}</div> : null}
             <div className="mt-4 flex flex-wrap gap-2">
               <button
                 type="button"
@@ -1077,10 +1100,18 @@ export default function OwnerDashboard() {
         ) : null}
       </Modal>
 
-      <Modal title="Item catalog" open={openCatalog} onClose={() => setOpenCatalog(false)}>
+      <Modal title="Item catalog" open={openCatalog} onClose={() => {
+        setOpenCatalog(false);
+        setCatEdit(null);
+        setCatSaveError(null);
+        setCatSaving(false);
+      }}>
         <Toolbar
           onRefresh={loadCatalog}
-          onAdd={() => setCatEdit({ title: "", note: "", mrp_inr: 0, discount_inr: 0, discount_pct: 0, purchase_price_inr: 0, stock: 0, photo_url: "", active: true })}
+          onAdd={() => {
+            setCatSaveError(null);
+            setCatEdit({ title: "", note: "", mrp_inr: 0, discount_inr: 0, discount_pct: 0, purchase_price_inr: 0, stock: 0, photo_url: "", active: true });
+          }}
           addLabel="Add item"
           onExport={() => {
             const rows = catalog.map((i) => ({
@@ -1327,10 +1358,14 @@ downloadText(
             <div className="mt-4 flex flex-wrap gap-2">
               <button
                 type="button"
-                className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
+                disabled={catSaving}
+                className={cn(
+                  "rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800",
+                  catSaving && "opacity-60 cursor-not-allowed"
+                )}
                 onClick={upsertCatalog}
               >
-                Save
+                {catSaving ? "Saving…" : "Save"}
               </button>
               <button
                 type="button"
