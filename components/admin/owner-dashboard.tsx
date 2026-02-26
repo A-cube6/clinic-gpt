@@ -18,6 +18,7 @@ import {
   ClipboardList,
   ChevronDown,
   ChevronRight,
+  SlidersHorizontal,
 } from "lucide-react";
 
 type StaffRow = { id: string; role: string; full_name?: string | null };
@@ -48,7 +49,10 @@ type DoctorRow = {
   qualifications?: string | null;
   speciality?: string | null;
   experience?: string | null;
-  timings ?: string | null;
+  // Old free-text timings (kept for backward compatibility)
+  timings?: string | null;
+  // Weekly schedule map: { sun, mon, tue, wed, thu, fri, sat } -> "10:00-13:00, 16:00-19:00"
+  weekly_schedule?: Record<string, string> | null;
   start_date?: string | null;
   end_date?: string | null;
   active: boolean;
@@ -68,6 +72,54 @@ type ProcedureDoctorJoinRow = {
   doctor_id: string;
   doctors?: { name: string } | null;
 };
+
+const WEEK_DAYS: Array<{ key: string; label: string }> = [
+  { key: "sun", label: "Sunday" },
+  { key: "mon", label: "Monday" },
+  { key: "tue", label: "Tuesday" },
+  { key: "wed", label: "Wednesday" },
+  { key: "thu", label: "Thursday" },
+  { key: "fri", label: "Friday" },
+  { key: "sat", label: "Saturday" },
+];
+
+function normalizeWeeklySchedule(d?: Partial<DoctorRow> | null): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const day of WEEK_DAYS) out[day.key] = "";
+
+  if (!d) return out;
+
+  const ws = (d as any).weekly_schedule;
+  if (ws && typeof ws === "object") {
+    for (const day of WEEK_DAYS) {
+      const v = (ws as any)[day.key];
+      if (typeof v === "string") out[day.key] = v;
+    }
+    return out;
+  }
+
+  // Fallback: if old 'timings' is JSON, try to parse it.
+  if (typeof (d as any).timings === "string") {
+    const t = ((d as any).timings as string).trim();
+    if (t.startsWith("{") && t.endsWith("}")) {
+      try {
+        const parsed = JSON.parse(t);
+        if (parsed && typeof parsed === "object") {
+          for (const day of WEEK_DAYS) {
+            const v = (parsed as any)[day.key];
+            if (typeof v === "string") out[day.key] = v;
+          }
+        }
+      } catch {
+        // ignore
+      }
+    }
+  }
+
+  return out;
+}
+
+
 
 
 function cn(...classes: Array<string | false | null | undefined>) {
@@ -622,12 +674,37 @@ export default function OwnerDashboard() {
   const [docError, setDocError] = useState<string | null>(null);
   const [docEdit, setDocEdit] = useState<Partial<DoctorRow> | null>(null);
 
+  const [expandedDoctors, setExpandedDoctors] = useState<Record<string, boolean>>({});
+  const [docLayoutOpen, setDocLayoutOpen] = useState(false);
+  const [docColumns, setDocColumns] = useState({
+    speciality: false,
+    experience: false,
+    start_date: false,
+    end_date: false,
+    created_at: false,
+  });
+
+  const doctorHeaders = useMemo(() => {
+    const h: string[] = ["", "Name", "Phone", "Qualifications"];
+    if (docColumns.speciality) h.push("Speciality");
+    if (docColumns.experience) h.push("Experience");
+    if (docColumns.start_date) h.push("Start");
+    if (docColumns.end_date) h.push("End");
+    if (docColumns.created_at) h.push("Created");
+    h.push("Active", "Actions");
+    return h;
+  }, [docColumns]);
+
+  const toggleDoctor = (doctorId: string) => {
+    setExpandedDoctors((p) => ({ ...p, [doctorId]: !(p[doctorId] ?? false) }));
+  };
+
   const loadDoctors = async () => {
     setDocLoading(true);
     setDocError(null);
     const { data, error } = await supabase
       .from("doctors")
-      .select("id, name, phone, qualifications, speciality, experience, timings, start_date, end_date, active, created_at")
+      .select("id, name, phone, qualifications, speciality, experience, weekly_schedule, timings, start_date, end_date, active, created_at")
       .order("created_at", { ascending: false });
     if (error) setDocError(error.message);
     setDoctors((data ?? []) as DoctorRow[]);
@@ -642,6 +719,9 @@ export default function OwnerDashboard() {
       name: docEdit.name.trim(),
       phone: docEdit.phone ?? null,
       qualifications: docEdit.qualifications ?? null,
+      speciality: docEdit.speciality ?? null,
+      experience: docEdit.experience ?? null,
+      weekly_schedule: normalizeWeeklySchedule(docEdit),
       start_date: docEdit.start_date ?? null,
       end_date: docEdit.end_date ?? null,
       active: !!docEdit.active,
@@ -951,6 +1031,7 @@ export default function OwnerDashboard() {
         ) : null}
       </Modal>
 
+      
       <Modal title="Doctors" open={openDoctors} onClose={() => setOpenDoctors(false)}>
         <Toolbar
           onRefresh={loadDoctors}
@@ -959,6 +1040,9 @@ export default function OwnerDashboard() {
               name: "",
               phone: "",
               qualifications: "",
+              speciality: "",
+              experience: "",
+              weekly_schedule: normalizeWeeklySchedule(null),
               start_date: null,
               end_date: null,
               active: true,
@@ -971,7 +1055,9 @@ export default function OwnerDashboard() {
               name: d.name,
               phone: d.phone ?? "",
               qualifications: d.qualifications ?? "",
-              
+              speciality: d.speciality ?? "",
+              experience: d.experience ?? "",
+              weekly_schedule: JSON.stringify(normalizeWeeklySchedule(d)),
               start_date: d.start_date ?? "",
               end_date: d.end_date ?? "",
               active: d.active,
@@ -979,51 +1065,166 @@ export default function OwnerDashboard() {
             }));
             downloadText(
               "doctors.csv",
-              toCsv(rows, ["id", "full_name", "phone", "qualifications", "start_date", "end_date", "active", "created_at"])
+              toCsv(rows, [
+                "id",
+                "name",
+                "phone",
+                "qualifications",
+                "speciality",
+                "experience",
+                "weekly_schedule",
+                "start_date",
+                "end_date",
+                "active",
+                "created_at",
+              ])
             );
           }}
           onPrint={() => window.print()}
         />
 
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
+          <button
+            type="button"
+            className={cn(
+              "inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-semibold",
+              docLayoutOpen
+                ? "border-teal-200 bg-teal-50 text-teal-800"
+                : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+            )}
+            onClick={() => setDocLayoutOpen((v) => !v)}
+          >
+            <SlidersHorizontal className="h-4 w-4" />
+            Layout
+          </button>
+          <div className="text-xs text-slate-500">Tip: Expand a doctor to see weekly sittings.</div>
+        </div>
+
+        {docLayoutOpen ? (
+          <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <div className="text-xs font-semibold text-slate-700">Show columns</div>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2 md:grid-cols-3">
+              {[
+                { key: "speciality", label: "Speciality" },
+                { key: "experience", label: "Experience" },
+                { key: "start_date", label: "Start date" },
+                { key: "end_date", label: "End date" },
+                { key: "created_at", label: "Created at" },
+              ].map((c) => (
+                <label key={c.key} className="flex items-center gap-2 text-sm text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={(docColumns as any)[c.key]}
+                    onChange={(e) =>
+                      setDocColumns((p) => ({
+                        ...(p as any),
+                        [c.key]: e.target.checked,
+                      }))
+                    }
+                  />
+                  <span className="font-semibold">{c.label}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
         {docError ? <div className="mt-4 text-sm text-red-600">{docError}</div> : null}
         {docLoading ? <div className="mt-4 text-sm text-slate-600">Loading…</div> : null}
 
-        <Table headers={["Name", "Phone", "Qualifications", "Start", "End", "Active", "Actions"]}>
-          {doctors.map((d) => (
-            <tr key={d.id} className="border-t border-slate-200">
-              <td className="px-4 py-3 font-semibold text-slate-900">{d.name}</td>
-              <td className="px-4 py-3 text-slate-700">{d.phone ?? "—"}</td>
-              <td className="px-4 py-3 text-slate-700">{d.qualifications ?? "—"}</td>
-              <td className="px-4 py-3 text-slate-700">{d.start_date ?? "—"}</td>
-              <td className="px-4 py-3 text-slate-700">{d.end_date ?? "—"}</td>
-              <td className="px-4 py-3 text-slate-700">{d.active ? "Yes" : "No"}</td>
-              <td className="px-4 py-3">
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-                    onClick={() => setDocEdit({ ...d })}
-                  >
-                    <Pencil className="h-4 w-4" />
-                    Edit
-                  </button>
-                  <button
-                    type="button"
-                    className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-50"
-                    onClick={() => deleteDoctor(d.id)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                    Delete
-                  </button>
-                </div>
-              </td>
-            </tr>
-          ))}
+        <Table headers={doctorHeaders}>
+          {doctors.map((d) => {
+            const isOpen = expandedDoctors[d.id] ?? false;
+            const ws = normalizeWeeklySchedule(d);
+
+            return (
+              <Fragment key={d.id}>
+                <tr className="border-t border-slate-200">
+                  <td className="px-4 py-3">
+                    <button
+                      type="button"
+                      onClick={() => toggleDoctor(d.id)}
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                      aria-label={isOpen ? "Collapse" : "Expand"}
+                    >
+                      {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                    </button>
+                  </td>
+
+                  <td className="px-4 py-3 font-semibold text-slate-900">{d.name}</td>
+                  <td className="px-4 py-3 text-slate-700">{d.phone ?? "—"}</td>
+                  <td className="px-4 py-3 text-slate-700">{d.qualifications ?? "—"}</td>
+
+                  {docColumns.speciality ? <td className="px-4 py-3 text-slate-700">{d.speciality ?? "—"}</td> : null}
+                  {docColumns.experience ? <td className="px-4 py-3 text-slate-700">{d.experience ?? "—"}</td> : null}
+                  {docColumns.start_date ? <td className="px-4 py-3 text-slate-700">{d.start_date ?? "—"}</td> : null}
+                  {docColumns.end_date ? <td className="px-4 py-3 text-slate-700">{d.end_date ?? "—"}</td> : null}
+                  {docColumns.created_at ? <td className="px-4 py-3 text-slate-700">{d.created_at ?? "—"}</td> : null}
+
+                  <td className="px-4 py-3 text-slate-700">{d.active ? "Yes" : "No"}</td>
+                  <td className="px-4 py-3">
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                        onClick={() => setDocEdit({ ...d, weekly_schedule: ws })}
+                      >
+                        <Pencil className="h-4 w-4" />
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-50"
+                        onClick={() => deleteDoctor(d.id)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        Delete
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+
+                {isOpen ? (
+                  <tr className="border-t border-slate-200 bg-slate-50">
+                    <td colSpan={doctorHeaders.length} className="px-4 py-4">
+                      <div className="text-xs font-semibold text-slate-700">Weekly sitting days & timings</div>
+                      <div className="mt-2 overflow-x-auto rounded-2xl border border-slate-200 bg-white">
+                        <table className="min-w-[860px] w-full border-collapse text-left text-xs">
+                          <thead className="bg-slate-50">
+                            <tr>
+                              {WEEK_DAYS.map((day) => (
+                                <th key={day.key} className="border-b border-slate-200 px-3 py-2 font-semibold text-slate-700">
+                                  {day.label}
+                                </th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            <tr>
+                              {WEEK_DAYS.map((day) => (
+                                <td key={day.key} className="border-t border-slate-200 px-3 py-2 text-slate-700">
+                                  {ws[day.key]?.trim() ? ws[day.key] : "—"}
+                                </td>
+                              ))}
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+                      <div className="mt-2 text-xs text-slate-500">
+                        Example: <span className="font-semibold">10:00-13:00, 16:00-19:00</span> (leave blank if not sitting).
+                      </div>
+                    </td>
+                  </tr>
+                ) : null}
+              </Fragment>
+            );
+          })}
         </Table>
 
         {docEdit ? (
           <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-            <div className="text-sm font-bold text-slate-900">Edit doctor</div>
+            <div className="text-sm font-bold text-slate-900">{docEdit.id ? "Edit doctor" : "Add doctor"}</div>
+
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
               <label className="block">
                 <div className="mb-1 text-xs font-semibold text-slate-700">Name</div>
@@ -1034,6 +1235,7 @@ export default function OwnerDashboard() {
                   placeholder="Dr. Name"
                 />
               </label>
+
               <label className="block">
                 <div className="mb-1 text-xs font-semibold text-slate-700">Phone</div>
                 <input
@@ -1043,6 +1245,7 @@ export default function OwnerDashboard() {
                   placeholder="+91…"
                 />
               </label>
+
               <label className="block sm:col-span-2">
                 <div className="mb-1 text-xs font-semibold text-slate-700">Qualifications</div>
                 <input
@@ -1052,25 +1255,56 @@ export default function OwnerDashboard() {
                   placeholder="BDS / MDS…"
                 />
               </label>
-              <label className="block">
-                <div className="mb-1 text-xs font-semibold text-slate-700">Start date</div>
-                <input
-                  type="date"
-                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none"
-                  value={docEdit.start_date ?? ""}
-                  onChange={(e) => setDocEdit((s) => ({ ...(s ?? {}), start_date: e.target.value || null }))}
-                />
-              </label>
-              <label className="block">
-                <div className="mb-1 text-xs font-semibold text-slate-700">End date</div>
-                <input
-                  type="date"
-                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none"
-                  value={docEdit.end_date ?? ""}
-                  onChange={(e) => setDocEdit((s) => ({ ...(s ?? {}), end_date: e.target.value || null }))}
-                />
-              </label>
-              <label className="flex items-center gap-2">
+
+              {docColumns.speciality ? (
+                <label className="block">
+                  <div className="mb-1 text-xs font-semibold text-slate-700">Speciality</div>
+                  <input
+                    className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none"
+                    value={docEdit.speciality ?? ""}
+                    onChange={(e) => setDocEdit((s) => ({ ...(s ?? {}), speciality: e.target.value }))}
+                    placeholder="e.g. Orthodontics"
+                  />
+                </label>
+              ) : null}
+
+              {docColumns.experience ? (
+                <label className="block">
+                  <div className="mb-1 text-xs font-semibold text-slate-700">Experience</div>
+                  <input
+                    className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none"
+                    value={docEdit.experience ?? ""}
+                    onChange={(e) => setDocEdit((s) => ({ ...(s ?? {}), experience: e.target.value }))}
+                    placeholder="e.g. 10 years"
+                  />
+                </label>
+              ) : null}
+
+              {docColumns.start_date ? (
+                <label className="block">
+                  <div className="mb-1 text-xs font-semibold text-slate-700">Start date</div>
+                  <input
+                    type="date"
+                    className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none"
+                    value={docEdit.start_date ?? ""}
+                    onChange={(e) => setDocEdit((s) => ({ ...(s ?? {}), start_date: e.target.value || null }))}
+                  />
+                </label>
+              ) : null}
+
+              {docColumns.end_date ? (
+                <label className="block">
+                  <div className="mb-1 text-xs font-semibold text-slate-700">End date</div>
+                  <input
+                    type="date"
+                    className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none"
+                    value={docEdit.end_date ?? ""}
+                    onChange={(e) => setDocEdit((s) => ({ ...(s ?? {}), end_date: e.target.value || null }))}
+                  />
+                </label>
+              ) : null}
+
+              <label className="flex items-center gap-2 sm:col-span-2">
                 <input
                   type="checkbox"
                   checked={!!docEdit.active}
@@ -1078,6 +1312,37 @@ export default function OwnerDashboard() {
                 />
                 <span className="text-sm font-semibold text-slate-700">Active</span>
               </label>
+            </div>
+
+            <div className="mt-5 rounded-2xl border border-slate-200 bg-white p-4">
+              <div className="text-sm font-bold text-slate-900">Weekly timings</div>
+              <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {WEEK_DAYS.map((day) => {
+                  const ws = normalizeWeeklySchedule(docEdit);
+                  return (
+                    <label key={day.key} className="block">
+                      <div className="mb-1 text-xs font-semibold text-slate-700">{day.label}</div>
+                      <input
+                        className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none"
+                        value={ws[day.key] ?? ""}
+                        onChange={(e) =>
+                          setDocEdit((s) => ({
+                            ...(s ?? {}),
+                            weekly_schedule: {
+                              ...normalizeWeeklySchedule(s ?? null),
+                              [day.key]: e.target.value,
+                            },
+                          }))
+                        }
+                        placeholder="10:00-13:00, 16:00-19:00"
+                      />
+                    </label>
+                  );
+                })}
+              </div>
+              <div className="mt-2 text-xs text-slate-500">
+                Leave blank for days the doctor does not sit. This is what shows in the twisty view.
+              </div>
             </div>
 
             <div className="mt-4 flex flex-wrap gap-2">
@@ -1099,6 +1364,7 @@ export default function OwnerDashboard() {
           </div>
         ) : null}
       </Modal>
+
 
       <Modal title="Item catalog" open={openCatalog} onClose={() => {
         setOpenCatalog(false);

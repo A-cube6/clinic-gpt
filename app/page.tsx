@@ -485,6 +485,7 @@ export default function Page() {
   }, [products, shopQuery, shopOnlyInStock, shopOnlyDiscounted, shopSort]);
 
   const shopHasActiveFilters = shopOnlyInStock || shopOnlyDiscounted || !!shopQuery.trim();
+  const shopMobileScrollable = shopResults.length > 5;
 
   const addToCart = (productId: string) => {
   const p = products.find((x) => x.id === productId);
@@ -1048,7 +1049,14 @@ export default function Page() {
               </div>
 
               {/* Mobile: compact list */}
-              <div className="mt-6 space-y-3 md:hidden">
+              <div
+                className={cn(
+                  "mt-6 md:hidden",
+                  shopMobileScrollable
+                    ? "max-h-[70vh] overflow-y-auto pr-1 overscroll-contain space-y-3"
+                    : "space-y-3"
+                )}
+              >
                 {shopResults.map((p) => {
                   const discounted = (p.discountInr ?? 0) > 0 || (p.discountPct ?? 0) > 0;
                   return (
