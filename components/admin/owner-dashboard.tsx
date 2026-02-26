@@ -21,7 +21,7 @@ import {
 
 type StaffRow = { id: string; role: string; full_name?: string | null };
 type CustomerRow = { id: string; email: string; full_name?: string | null; phone?: string | null; created_at?: string | null };
-type CatalogRow = { id: string; title: string; note?: string | null; price_inr: number; active: boolean; created_at?: string | null };
+type CatalogRow = { id: string; title: string; note?: string | null; mrp_inr: number; discount_inr: number; purchase_price_inr: number; stock: number; photo_url?: string | null; sell_price_inr?: number | null; active: boolean; created_at?: string | null };
 type OrderRow = {
   id: string;
   created_at?: string | null;
@@ -344,7 +344,7 @@ export default function OwnerDashboard() {
     setCatError(null);
     const { data, error } = await supabase
       .from("catalog_items")
-      .select("id, title, note, price_inr, active, created_at")
+      .select("id, title, note, mrp_inr, discount_inr, purchase_price_inr, stock, photo_url, sell_price_inr, active, created_at")
       .order("created_at", { ascending: false });
     if (error) setCatError(error.message);
     setCatalog((data ?? []) as CatalogRow[]);
@@ -358,7 +358,11 @@ export default function OwnerDashboard() {
     const payload: any = {
       title: catEdit.title.trim(),
       note: catEdit.note ?? null,
-      price_inr: Number.isFinite(Number(catEdit.price_inr)) ? Number(catEdit.price_inr) : 0,
+      mrp_inr: Number.isFinite(Number(catEdit.mrp_inr)) ? Number(catEdit.mrp_inr) : 0,
+      discount_inr: Number.isFinite(Number(catEdit.discount_inr)) ? Number(catEdit.discount_inr) : 0,
+      purchase_price_inr: Number.isFinite(Number(catEdit.purchase_price_inr)) ? Number(catEdit.purchase_price_inr) : 0,
+      stock: Number.isFinite(Number(catEdit.stock)) ? Number(catEdit.stock) : 0,
+      photo_url: catEdit.photo_url ? String(catEdit.photo_url).trim() : null,
       active: !!catEdit.active,
     };
     if (catEdit.id) payload.id = catEdit.id;
@@ -902,32 +906,65 @@ export default function OwnerDashboard() {
       <Modal title="Item catalog" open={openCatalog} onClose={() => setOpenCatalog(false)}>
         <Toolbar
           onRefresh={loadCatalog}
-          onAdd={() => setCatEdit({ title: "", note: "", price_inr: 0, active: true })}
+          onAdd={() => setCatEdit({ title: "", note: "", mrp_inr: 0, discount_inr: 0, purchase_price_inr: 0, stock: 0, photo_url: "", active: true })}
           addLabel="Add item"
           onExport={() => {
             const rows = catalog.map((i) => ({
-              id: i.id,
-              title: i.title,
-              note: i.note ?? "",
-              price_inr: i.price_inr,
-              active: i.active,
-              created_at: i.created_at ?? "",
-            }));
-            downloadText("catalog_items.csv", toCsv(rows, ["id", "title", "note", "price_inr", "active", "created_at"])) ;
+  id: i.id,
+  title: i.title,
+  note: i.note ?? "",
+  mrp_inr: i.mrp_inr ?? 0,
+  discount_inr: i.discount_inr ?? 0,
+  sell_price_inr: (i.sell_price_inr ?? Math.max((i.mrp_inr ?? 0) - (i.discount_inr ?? 0), 0)),
+  purchase_price_inr: i.purchase_price_inr ?? 0,
+  stock: i.stock ?? 0,
+  photo_url: i.photo_url ?? "",
+  active: i.active,
+  created_at: i.created_at ?? "",
+}));
+downloadText(
+  "catalog_items.csv",
+  toCsv(rows, [
+    "id",
+    "title",
+    "note",
+    "mrp_inr",
+    "discount_inr",
+    "sell_price_inr",
+    "purchase_price_inr",
+    "stock",
+    "photo_url",
+    "active",
+    "created_at",
+  ])
+);
           }}
           onPrint={() => window.print()}
         />
         {catError ? <div className="mt-4 text-sm text-red-600">{catError}</div> : null}
         {catLoading ? <div className="mt-4 text-sm text-slate-600">Loading…</div> : null}
 
-        <Table headers={["Title", "Price (INR)", "Active", "Created", "Actions"]}>
+        <Table headers={["Photo", "Title", "MRP", "Discount", "Sell", "Purchase", "Stock", "Active", "Created", "Actions"]}>
           {catalog.map((i) => (
             <tr key={i.id} className="border-t border-slate-200">
+              <td className="px-4 py-3">
+                <div className="h-12 w-12 overflow-hidden rounded-xl border border-slate-200 bg-slate-100">
+                  {i.photo_url ? (
+                    <img src={i.photo_url} alt={i.title} className="h-full w-full object-cover" />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center text-[10px] font-semibold text-slate-400">No photo</div>
+                  )}
+                </div>
+              </td>
               <td className="px-4 py-3">
                 <div className="font-semibold text-slate-900">{i.title}</div>
                 {i.note ? <div className="mt-1 text-xs text-slate-600">{i.note}</div> : null}
               </td>
-              <td className="px-4 py-3 text-slate-700">₹{i.price_inr}</td>
+              <td className="px-4 py-3 text-slate-700">₹{i.mrp_inr}</td>
+              <td className="px-4 py-3 text-slate-700">₹{i.discount_inr}</td>
+              <td className="px-4 py-3 text-slate-900 font-semibold">₹{(i.sell_price_inr ?? Math.max((i.mrp_inr ?? 0) - (i.discount_inr ?? 0), 0))}</td>
+              <td className="px-4 py-3 text-slate-700">₹{i.purchase_price_inr}</td>
+              <td className="px-4 py-3 text-slate-700">{i.stock}</td>
               <td className="px-4 py-3">
                 <span className={cn("rounded-full px-2 py-1 text-xs font-semibold", i.active ? "bg-teal-50 text-teal-800" : "bg-slate-100 text-slate-700")}>
                   {i.active ? "Active" : "Inactive"}
@@ -962,44 +999,111 @@ export default function OwnerDashboard() {
           <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-4">
             <div className="text-sm font-bold text-slate-900">{catEdit.id ? "Edit item" : "Add item"}</div>
             <div className="mt-3 grid gap-3 sm:grid-cols-4">
-              <label className="block sm:col-span-2">
-                <div className="mb-1 text-xs font-semibold text-slate-700">Title</div>
-                <input
-                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none"
-                  value={catEdit.title ?? ""}
-                  onChange={(e) => setCatEdit((s) => ({ ...(s ?? {}), title: e.target.value }))}
-                  placeholder="Soft-bristle toothbrush"
-                />
-              </label>
-              <label className="block sm:col-span-1">
-                <div className="mb-1 text-xs font-semibold text-slate-700">Price (INR)</div>
-                <input
-                  type="number"
-                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none"
-                  value={String(catEdit.price_inr ?? 0)}
-                  onChange={(e) => setCatEdit((s) => ({ ...(s ?? {}), price_inr: Number(e.target.value) }))}
-                />
-              </label>
-              <label className="block sm:col-span-1">
-                <div className="mb-1 text-xs font-semibold text-slate-700">Active</div>
-                <select
-                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none"
-                  value={catEdit.active ? "true" : "false"}
-                  onChange={(e) => setCatEdit((s) => ({ ...(s ?? {}), active: e.target.value === "true" }))}
-                >
-                  <option value="true">true</option>
-                  <option value="false">false</option>
-                </select>
-              </label>
-              <label className="block sm:col-span-4">
-                <div className="mb-1 text-xs font-semibold text-slate-700">Note</div>
-                <input
-                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none"
-                  value={catEdit.note ?? ""}
-                  onChange={(e) => setCatEdit((s) => ({ ...(s ?? {}), note: e.target.value }))}
-                  placeholder="Short description"
-                />
-              </label>
+<label className="block sm:col-span-2">
+  <div className="mb-1 text-xs font-semibold text-slate-700">Title</div>
+  <input
+    className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none"
+    value={catEdit.title ?? ""}
+    onChange={(e) => setCatEdit((s) => ({ ...(s ?? {}), title: e.target.value }))}
+    placeholder="Soft-bristle toothbrush"
+  />
+</label>
+
+<label className="block sm:col-span-1">
+  <div className="mb-1 text-xs font-semibold text-slate-700">MRP (INR)</div>
+  <input
+    type="number"
+    className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none"
+    value={String(catEdit.mrp_inr ?? 0)}
+    onChange={(e) => setCatEdit((s) => ({ ...(s ?? {}), mrp_inr: Number(e.target.value) }))}
+  />
+</label>
+
+<label className="block sm:col-span-1">
+  <div className="mb-1 text-xs font-semibold text-slate-700">Discount (INR)</div>
+  <input
+    type="number"
+    className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none"
+    value={String(catEdit.discount_inr ?? 0)}
+    onChange={(e) => setCatEdit((s) => ({ ...(s ?? {}), discount_inr: Number(e.target.value) }))}
+  />
+</label>
+
+<label className="block sm:col-span-1">
+  <div className="mb-1 text-xs font-semibold text-slate-700">Sell price (auto)</div>
+  <input
+    type="text"
+    readOnly
+    className="w-full cursor-not-allowed rounded-xl border border-slate-200 bg-slate-100 px-3 py-2 text-sm font-semibold text-slate-800 outline-none"
+    value={
+      "₹" +
+      String(Math.max(Number(catEdit.mrp_inr ?? 0) - Number(catEdit.discount_inr ?? 0), 0))
+    }
+  />
+</label>
+
+<label className="block sm:col-span-1">
+  <div className="mb-1 text-xs font-semibold text-slate-700">Purchase price (INR)</div>
+  <input
+    type="number"
+    className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none"
+    value={String(catEdit.purchase_price_inr ?? 0)}
+    onChange={(e) => setCatEdit((s) => ({ ...(s ?? {}), purchase_price_inr: Number(e.target.value) }))}
+  />
+</label>
+
+<label className="block sm:col-span-1">
+  <div className="mb-1 text-xs font-semibold text-slate-700">Stock</div>
+  <input
+    type="number"
+    className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none"
+    value={String(catEdit.stock ?? 0)}
+    onChange={(e) => setCatEdit((s) => ({ ...(s ?? {}), stock: Number(e.target.value) }))}
+  />
+</label>
+
+<label className="block sm:col-span-1">
+  <div className="mb-1 text-xs font-semibold text-slate-700">Active</div>
+  <select
+    className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none"
+    value={catEdit.active ? "true" : "false"}
+    onChange={(e) => setCatEdit((s) => ({ ...(s ?? {}), active: e.target.value === "true" }))}
+  >
+    <option value="true">true</option>
+    <option value="false">false</option>
+  </select>
+</label>
+
+<label className="block sm:col-span-3">
+  <div className="mb-1 text-xs font-semibold text-slate-700">Photo URL</div>
+  <input
+    className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none"
+    value={catEdit.photo_url ?? ""}
+    onChange={(e) => setCatEdit((s) => ({ ...(s ?? {}), photo_url: e.target.value }))}
+    placeholder="https://…"
+  />
+</label>
+
+<label className="block sm:col-span-1">
+  <div className="mb-1 text-xs font-semibold text-slate-700">Preview</div>
+  <div className="h-10 w-10 overflow-hidden rounded-xl border border-slate-200 bg-slate-100">
+    {catEdit.photo_url ? (
+      <img src={catEdit.photo_url} alt={String(catEdit.title ?? "Item")} className="h-full w-full object-cover" />
+    ) : (
+      <div className="flex h-full w-full items-center justify-center text-[10px] font-semibold text-slate-400">—</div>
+    )}
+  </div>
+</label>
+
+<label className="block sm:col-span-4">
+  <div className="mb-1 text-xs font-semibold text-slate-700">Note</div>
+  <input
+    className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none"
+    value={catEdit.note ?? ""}
+    onChange={(e) => setCatEdit((s) => ({ ...(s ?? {}), note: e.target.value }))}
+    placeholder="Short description"
+  />
+</label>
             </div>
             <div className="mt-4 flex flex-wrap gap-2">
               <button

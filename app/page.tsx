@@ -198,13 +198,13 @@ const ServicesGrid = () => (
 );
 
 // --- Products (for cart/checkout) ---
-type Product = { id: string; title: string; priceInr: number; note: string };
+type Product = { id: string; title: string; note: string; mrpInr: number; discountInr: number; priceInr: number; stock: number; photoUrl?: string | null };
 // Fallback products (if catalog_items isn't configured yet)
 const FALLBACK_PRODUCTS: Product[] = [
-  { id: "brush_soft", title: "Soft-Bristle Toothbrush", priceInr: 149, note: "Gentle on gums, everyday use." },
-  { id: "paste_fluoride", title: "Fluoride Toothpaste", priceInr: 199, note: "Cavity protection for daily brushing." },
-  { id: "floss", title: "Dental Floss", priceInr: 249, note: "For interdental cleaning." },
-  { id: "mouthwash", title: "Mouthwash", priceInr: 299, note: "Fresh breath and plaque control." },
+  { id: "brush_soft", title: "Soft-Bristle Toothbrush", note: "Gentle on gums, everyday use.", mrpInr: 149, discountInr: 0, priceInr: 149, stock: 999, photoUrl: null },
+  { id: "paste_fluoride", title: "Fluoride Toothpaste", note: "Cavity protection for daily brushing.", mrpInr: 199, discountInr: 0, priceInr: 199, stock: 999, photoUrl: null },
+  { id: "floss", title: "Dental Floss", note: "For interdental cleaning.", mrpInr: 249, discountInr: 0, priceInr: 249, stock: 999, photoUrl: null },
+  { id: "mouthwash", title: "Mouthwash", note: "Fresh breath and plaque control.", mrpInr: 299, discountInr: 0, priceInr: 299, stock: 999, photoUrl: null },
 ];
 
 const FAQS = [
@@ -315,7 +315,7 @@ export default function Page() {
     (async () => {
       const { data, error } = await supabase
         .from("catalog_items")
-        .select("id,title,note,price_inr,active")
+        .select("id,title,note,mrp_inr,discount_inr,sell_price_inr,stock,photo_url,active")
         .eq("active", true)
         .order("created_at", { ascending: false });
 
@@ -325,19 +325,28 @@ export default function Page() {
         return;
       }
 
-      const rows = (data ?? []) as Array<{ id: string; title: string; note: string | null; price_inr: number }>;
+      const rows = (data ?? []) as Array<{ id: string; title: string; note: string | null; mrp_inr: number | null; discount_inr: number | null; sell_price_inr: number | null; stock: number | null; photo_url: string | null }>;
       if (rows.length === 0) {
         setCatalogReady(false);
         return;
       }
 
       setProducts(
-        rows.map((r) => ({
-          id: r.id,
-          title: r.title,
-          note: r.note ?? "",
-          priceInr: r.price_inr ?? 0,
-        }))
+        rows.map((r) => {
+          const mrp = r.mrp_inr ?? 0;
+          const discount = r.discount_inr ?? 0;
+          const sell = r.sell_price_inr ?? Math.max(mrp - discount, 0);
+          return {
+            id: r.id,
+            title: r.title,
+            note: r.note ?? "",
+            mrpInr: mrp,
+            discountInr: discount,
+            priceInr: sell,
+            stock: r.stock ?? 0,
+            photoUrl: r.photo_url ?? null,
+          };
+        })
       );
       setCatalogReady(true);
       setCatalogError(null);
@@ -376,26 +385,48 @@ export default function Page() {
   const grandTotal = useMemo(() => subTotal + shipping, [subTotal, shipping]);
 
   const addToCart = (productId: string) => {
-    setCart((prev) => {
-      const idx = prev.findIndex((x) => x.productId === productId);
-      if (idx >= 0) {
-        const next = [...prev];
-        next[idx] = { ...next[idx], qty: clampQty(next[idx].qty + 1) };
-        return next;
-      }
-      return [...prev, { productId, qty: 1 }];
-    });
-    setCheckoutOpen(true);
-    setCheckoutStep("cart");
-  };
+  const p = products.find((x) => x.id === productId);
+  const stock = p?.stock ?? 0;
+  if (stock <= 0) {
+    alert("Out of stock.");
+    return;
+  }
+
+  setCart((prev) => {
+    const idx = prev.findIndex((x) => x.productId === productId);
+    if (idx >= 0) {
+      const next = [...prev];
+      const current = next[idx].qty;
+      const desired = clampQty(current + 1);
+      const capped = Math.min(desired, stock);
+      next[idx] = { ...next[idx], qty: capped };
+      return next;
+    }
+    return [...prev, { productId, qty: 1 }];
+  });
+  setCheckoutOpen(true);
+  setCheckoutStep("cart");
+};
 
   const updateQty = (productId: string, qty: number) => {
-    setCart((prev) =>
-      prev
-        .map((x) => (x.productId === productId ? { ...x, qty: clampQty(qty) } : x))
-        .filter((x) => x.qty > 0)
-    );
-  };
+  const p = products.find((x) => x.id === productId);
+  const stock = p?.stock ?? 0;
+
+  // If stock is 0, remove item from cart.
+  if (stock <= 0) {
+    setCart((prev) => prev.filter((x) => x.productId !== productId));
+    return;
+  }
+
+  const desired = clampQty(qty);
+  const capped = Math.min(desired, stock);
+
+  setCart((prev) =>
+    prev
+      .map((x) => (x.productId === productId ? { ...x, qty: capped } : x))
+      .filter((x) => x.qty > 0)
+  );
+};
   const removeItem = (productId: string) => setCart((prev) => prev.filter((x) => x.productId !== productId));
 
   const openCart = () => {
@@ -751,14 +782,39 @@ export default function Page() {
           <div className="mt-10 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {products.map((p) => (
               <Card key={p.id}>
-                <div className="h-36 rounded-2xl bg-slate-100" />
+                <div className="h-36 overflow-hidden rounded-2xl bg-slate-100">
+                  {p.photoUrl ? (
+                    <img src={p.photoUrl} alt={p.title} className="h-full w-full object-cover" />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center text-xs font-semibold text-slate-400">
+                      No photo
+                    </div>
+                  )}
+                </div>
                 <div className="mt-4 text-sm font-semibold">{p.title}</div>
                 <div className="mt-1 text-sm text-slate-600">{p.note}</div>
-                <div className="mt-3 flex items-center justify-between">
-                  <div className="text-sm font-semibold">{formatInr(p.priceInr)}</div>
+                <div className="mt-3 flex items-center justify-between gap-3">
+                  <div className="text-sm">
+                    <div className="font-semibold">{formatInr(p.priceInr)}</div>
+                    {p.discountInr > 0 ? (
+                      <div className="text-xs text-slate-500 line-through">{formatInr(p.mrpInr)}</div>
+                    ) : (
+                      <div className="text-xs text-slate-500">MRP {formatInr(p.mrpInr)}</div>
+                    )}
+                    <div className={cn("text-xs", p.stock > 0 ? "text-slate-600" : "text-rose-700")}>
+                      {p.stock > 0 ? `${p.stock} in stock` : "Out of stock"}
+                    </div>
+                  </div>
                   <button
-                    className={cn(BTN.base, BTN.outline, BTN.small, "rounded-xl px-3 py-2")}
+                    className={cn(
+                      BTN.base,
+                      BTN.outline,
+                      BTN.small,
+                      "rounded-xl px-3 py-2",
+                      p.stock <= 0 && "cursor-not-allowed opacity-50"
+                    )}
                     onClick={() => addToCart(p.id)}
+                    disabled={p.stock <= 0}
                   >
                     <ShoppingBag className="h-4 w-4" />
                     Add

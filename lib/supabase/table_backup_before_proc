@@ -1,0 +1,84 @@
+-- WARNING: This schema is for context only and is not meant to be run.
+-- Table order and constraints may not be valid for execution.
+
+CREATE TABLE public.catalog_items (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  sku text UNIQUE,
+  name text,
+  price_inr integer NOT NULL DEFAULT 0,
+  active boolean NOT NULL DEFAULT true,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  title text,
+  note text,
+  mrp_inr integer NOT NULL DEFAULT 0,
+  discount_inr integer NOT NULL DEFAULT 0,
+  purchase_price_inr integer NOT NULL DEFAULT 0,
+  stock integer NOT NULL DEFAULT 0,
+  photo_url text,
+  sell_price_inr integer DEFAULT GREATEST((mrp_inr - discount_inr), 0),
+  CONSTRAINT catalog_items_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.customers (
+  id uuid NOT NULL,
+  email text,
+  full_name text,
+  phone text,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT customers_pkey PRIMARY KEY (id),
+  CONSTRAINT customers_id_fkey FOREIGN KEY (id) REFERENCES auth.users(id)
+);
+CREATE TABLE public.doctors (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  name text,
+  phone text,
+  qualifications text,
+  speciality text,
+  experience text,
+  start_date date,
+  end_date date,
+  active boolean NOT NULL DEFAULT true,
+  timings text,
+  created_at timestamp with time zone,
+  CONSTRAINT doctors_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.order_items (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  order_id uuid NOT NULL,
+  product_id text NOT NULL,
+  title text NOT NULL,
+  qty integer NOT NULL DEFAULT 1,
+  price_inr integer NOT NULL DEFAULT 0,
+  catalog_item_id uuid,
+  CONSTRAINT order_items_pkey PRIMARY KEY (id),
+  CONSTRAINT order_items_order_id_fkey FOREIGN KEY (order_id) REFERENCES public.orders(id),
+  CONSTRAINT order_items_catalog_item_id_fkey FOREIGN KEY (catalog_item_id) REFERENCES public.catalog_items(id)
+);
+CREATE TABLE public.orders (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  user_id uuid,
+  status text NOT NULL DEFAULT 'created'::text,
+  subtotal_inr integer NOT NULL DEFAULT 0,
+  shipping_inr integer NOT NULL DEFAULT 0,
+  total_inr integer NOT NULL DEFAULT 0,
+  customer_name text,
+  customer_phone text,
+  address1 text,
+  city text,
+  pin_code text,
+  currency text NOT NULL DEFAULT 'INR'::text,
+  payment_provider text,
+  provider_order_id text,
+  provider_payment_id text,
+  provider_signature text,
+  CONSTRAINT orders_pkey PRIMARY KEY (id),
+  CONSTRAINT orders_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
+);
+CREATE TABLE public.staff_profiles (
+  id uuid NOT NULL,
+  role text NOT NULL CHECK (role = ANY (ARRAY['owner'::text, 'reception'::text])),
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  full_name text,
+  CONSTRAINT staff_profiles_pkey PRIMARY KEY (id),
+  CONSTRAINT staff_profiles_id_fkey FOREIGN KEY (id) REFERENCES auth.users(id)
+);
