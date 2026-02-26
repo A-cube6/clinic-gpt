@@ -16,7 +16,9 @@ export default function AdminLoginClient() {
   const [msg, setMsg] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [resetEmail, setResetEmail] = useState("");
-const [resetMsg, setResetMsg] = useState<string | null>(null);
+  const [resetMsg, setResetMsg] = useState<string | null>(null);
+
+const isSiteLock = nextPath === "/";
 
   const signIn = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -55,10 +57,16 @@ const [resetMsg, setResetMsg] = useState<string | null>(null);
   setResetMsg("Password reset link sent. Check your email.");
 };
 
+
+
   return (
     <main className="mx-auto max-w-md px-4 py-14">
       <h1 className="text-2xl font-bold text-slate-900">Admin login</h1>
-      <p className="mt-2 text-sm text-slate-600">Owner / Reception access only.</p>
+      <p className="mt-2 text-sm text-slate-600">
+        {isSiteLock
+          ? "This site can only be accessed by the owner and is still under development."
+          : "Owner / Reception access only."}
+      </p>
 
       <form
         onSubmit={signIn}
