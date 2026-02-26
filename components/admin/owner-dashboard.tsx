@@ -15,13 +15,14 @@ import {
   X,
   RefreshCw,
   ShoppingCart,
+  ClipboardList,
   ChevronDown,
   ChevronRight,
 } from "lucide-react";
 
 type StaffRow = { id: string; role: string; full_name?: string | null };
 type CustomerRow = { id: string; email: string; full_name?: string | null; phone?: string | null; created_at?: string | null };
-type CatalogRow = { id: string; title: string; note?: string | null; mrp_inr: number; discount_inr: number; purchase_price_inr: number; stock: number; photo_url?: string | null; sell_price_inr?: number | null; active: boolean; created_at?: string | null };
+type CatalogRow = { id: string; title: string; note?: string | null; mrp_inr: number; discount_inr: number; discount_pct: number; purchase_price_inr: number; stock: number; photo_url?: string | null; sell_price_inr?: number | null; active: boolean; created_at?: string | null };
 type OrderRow = {
   id: string;
   created_at?: string | null;
@@ -53,6 +54,21 @@ type DoctorRow = {
   active: boolean;
   created_at?: string | null;
 };
+
+type ProcedureRow = {
+  id: string;
+  name: string;
+  price_inr: number;
+  active: boolean;
+  created_at?: string | null;
+};
+
+type ProcedureDoctorJoinRow = {
+  procedure_id: string;
+  doctor_id: string;
+  doctors?: { name: string } | null;
+};
+
 
 function cn(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");
@@ -244,6 +260,7 @@ export default function OwnerDashboard() {
   const [openCustomers, setOpenCustomers] = useState(false);
   const [openCatalog, setOpenCatalog] = useState(false);
   const [openDoctors, setOpenDoctors] = useState(false);
+  const [openProcedures, setOpenProcedures] = useState(false);
   const [openOrders, setOpenOrders] = useState(false);
 
   // --- STAFF ---
@@ -344,7 +361,7 @@ export default function OwnerDashboard() {
     setCatError(null);
     const { data, error } = await supabase
       .from("catalog_items")
-      .select("id, title, note, mrp_inr, discount_inr, purchase_price_inr, stock, photo_url, sell_price_inr, active, created_at")
+      .select("id, title, note, mrp_inr, discount_inr, discount_pct, purchase_price_inr, stock, photo_url, sell_price_inr, active, created_at")
       .order("created_at", { ascending: false });
     if (error) setCatError(error.message);
     setCatalog((data ?? []) as CatalogRow[]);
@@ -360,6 +377,7 @@ export default function OwnerDashboard() {
       note: catEdit.note ?? null,
       mrp_inr: Number.isFinite(Number(catEdit.mrp_inr)) ? Number(catEdit.mrp_inr) : 0,
       discount_inr: Number.isFinite(Number(catEdit.discount_inr)) ? Number(catEdit.discount_inr) : 0,
+      discount_pct: Number.isFinite(Number(catEdit.discount_pct)) ? Number(catEdit.discount_pct) : 0,
       purchase_price_inr: Number.isFinite(Number(catEdit.purchase_price_inr)) ? Number(catEdit.purchase_price_inr) : 0,
       stock: Number.isFinite(Number(catEdit.stock)) ? Number(catEdit.stock) : 0,
       photo_url: catEdit.photo_url ? String(catEdit.photo_url).trim() : null,
@@ -383,7 +401,150 @@ export default function OwnerDashboard() {
     await loadCatalog();
   };
 
-  // --- ORDERS (read-only for now) ---
+  
+  // --- PROCEDURES ---
+  const [procedures, setProcedures] = useState<ProcedureRow[]>([]);
+  const [procLoading, setProcLoading] = useState(false);
+  const [procError, setProcError] = useState<string | null>(null);
+  const [procEdit, setProcEdit] = useState<(Partial<ProcedureRow> & { doctor_ids?: string[] }) | null>(null);
+
+  const [procDoctorIds, setProcDoctorIds] = useState<Record<string, string[]>>({});
+  const [procDoctorNames, setProcDoctorNames] = useState<Record<string, string[]>>({});
+
+  const loadProcedures = async () => {
+    setProcLoading(true);
+    setProcError(null);
+
+    const { data, error } = await supabase
+      .from("procedures")
+      .select("id, name, price_inr, active, created_at")
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      setProcError(error.message);
+      setProcedures([]);
+      setProcDoctorIds({});
+      setProcDoctorNames({});
+      setProcLoading(false);
+      return;
+    }
+
+    const procs = (data ?? []) as ProcedureRow[];
+    setProcedures(procs);
+
+    const ids = procs.map((p) => p.id);
+    if (ids.length === 0) {
+      setProcDoctorIds({});
+      setProcDoctorNames({});
+      setProcLoading(false);
+      return;
+    }
+
+    const { data: joins, error: jerr } = await supabase
+      .from("procedure_doctors")
+      .select("procedure_id, doctor_id, doctors(name)")
+      .in("procedure_id", ids);
+
+    if (jerr) {
+      setProcError(jerr.message);
+      setProcDoctorIds({});
+      setProcDoctorNames({});
+      setProcLoading(false);
+      return;
+    }
+
+    const idMap: Record<string, string[]> = {};
+    const nameMap: Record<string, string[]> = {};
+    ((joins ?? []) as any[]).forEach((r) => {
+      const pid = r.procedure_id as string;
+      const did = r.doctor_id as string;
+      if (!idMap[pid]) idMap[pid] = [];
+      if (!idMap[pid].includes(did)) idMap[pid].push(did);
+
+      const nm = r.doctors?.name as string | undefined;
+      if (nm) {
+        if (!nameMap[pid]) nameMap[pid] = [];
+        if (!nameMap[pid].includes(nm)) nameMap[pid].push(nm);
+      }
+    });
+
+    setProcDoctorIds(idMap);
+    setProcDoctorNames(nameMap);
+    setProcLoading(false);
+  };
+
+  const toggleProcDoctor = (doctorId: string) => {
+    setProcEdit((s) => {
+      const prev = s ?? {};
+      const set = new Set(prev.doctor_ids ?? []);
+      if (set.has(doctorId)) set.delete(doctorId);
+      else set.add(doctorId);
+      return { ...prev, doctor_ids: Array.from(set) };
+    });
+  };
+
+  const upsertProcedure = async () => {
+    if (!procEdit?.name?.trim()) return;
+    if (!confirm("Save this procedure?")) return;
+
+    const payload: any = {
+      name: procEdit.name.trim(),
+      price_inr: Number.isFinite(Number(procEdit.price_inr)) ? Number(procEdit.price_inr) : 0,
+      active: !!procEdit.active,
+    };
+
+    let procId = procEdit.id;
+
+    if (procId) {
+      const { error } = await supabase.from("procedures").update(payload).eq("id", procId);
+      if (error) {
+        alert(error.message);
+        return;
+      }
+    } else {
+      const { data, error } = await supabase.from("procedures").insert(payload).select("id").maybeSingle();
+      if (error) {
+        alert(error.message);
+        return;
+      }
+      procId = data?.id as string | undefined;
+      if (!procId) {
+        alert("Failed to create procedure (no id returned).");
+        return;
+      }
+    }
+
+    const doctorIds = Array.from(new Set((procEdit.doctor_ids ?? []).filter(Boolean)));
+
+    // Replace mapping
+    const { error: delErr } = await supabase.from("procedure_doctors").delete().eq("procedure_id", procId);
+    if (delErr) {
+      alert(delErr.message);
+      return;
+    }
+
+    if (doctorIds.length > 0) {
+      const rows = doctorIds.map((did) => ({ procedure_id: procId, doctor_id: did }));
+      const { error: insErr } = await supabase.from("procedure_doctors").insert(rows);
+      if (insErr) {
+        alert(insErr.message);
+        return;
+      }
+    }
+
+    setProcEdit(null);
+    await loadProcedures();
+  };
+
+  const deleteProcedure = async (id: string) => {
+    if (!confirm("Delete this procedure? This cannot be undone.")) return;
+    const { error } = await supabase.from("procedures").delete().eq("id", id);
+    if (error) alert(error.message);
+    await loadProcedures();
+  };
+
+
+// --- ORDERS (read-only for now) ---
   const [orders, setOrders] = useState<OrderRow[]>([]);
   const [ordersLoading, setOrdersLoading] = useState(false);
   const [ordersError, setOrdersError] = useState<string | null>(null);
@@ -444,7 +605,7 @@ export default function OwnerDashboard() {
     setDocError(null);
     const { data, error } = await supabase
       .from("doctors")
-      .select("id, name, phone, qualifications, start_date, end_date, active, created_at")
+      .select("id, name, phone, qualifications, speciality, experience, timings, start_date, end_date, active, created_at")
       .order("created_at", { ascending: false });
     if (error) setDocError(error.message);
     setDoctors((data ?? []) as DoctorRow[]);
@@ -494,6 +655,12 @@ export default function OwnerDashboard() {
     if (openDoctors) loadDoctors();
   }, [openDoctors]);
   useEffect(() => {
+    if (openProcedures) {
+      loadProcedures();
+      if (doctors.length === 0) loadDoctors();
+    }
+  }, [openProcedures]);
+  useEffect(() => {
     if (openOrders) loadOrders();
   }, [openOrders]);
 
@@ -520,6 +687,13 @@ export default function OwnerDashboard() {
           desc="Doctor panel shown on homepage."
           cta="Manage"
           onOpen={() => setOpenDoctors(true)}
+        />
+        <CardShell
+          icon={<ClipboardList className="h-5 w-5" />}
+          title="Procedures"
+          desc="Price list + allowed doctors."
+          cta="Manage"
+          onOpen={() => setOpenProcedures(true)}
         />
         <CardShell
           icon={<UserRound className="h-5 w-5" />}
@@ -906,7 +1080,7 @@ export default function OwnerDashboard() {
       <Modal title="Item catalog" open={openCatalog} onClose={() => setOpenCatalog(false)}>
         <Toolbar
           onRefresh={loadCatalog}
-          onAdd={() => setCatEdit({ title: "", note: "", mrp_inr: 0, discount_inr: 0, purchase_price_inr: 0, stock: 0, photo_url: "", active: true })}
+          onAdd={() => setCatEdit({ title: "", note: "", mrp_inr: 0, discount_inr: 0, discount_pct: 0, purchase_price_inr: 0, stock: 0, photo_url: "", active: true })}
           addLabel="Add item"
           onExport={() => {
             const rows = catalog.map((i) => ({
@@ -915,6 +1089,7 @@ export default function OwnerDashboard() {
   note: i.note ?? "",
   mrp_inr: i.mrp_inr ?? 0,
   discount_inr: i.discount_inr ?? 0,
+  discount_pct: (i.discount_pct ?? (i.mrp_inr ? Math.round(((i.discount_inr ?? 0) / i.mrp_inr) * 10000) / 100 : 0)),
   sell_price_inr: (i.sell_price_inr ?? Math.max((i.mrp_inr ?? 0) - (i.discount_inr ?? 0), 0)),
   purchase_price_inr: i.purchase_price_inr ?? 0,
   stock: i.stock ?? 0,
@@ -930,6 +1105,7 @@ downloadText(
     "note",
     "mrp_inr",
     "discount_inr",
+    "discount_pct",
     "sell_price_inr",
     "purchase_price_inr",
     "stock",
@@ -944,7 +1120,7 @@ downloadText(
         {catError ? <div className="mt-4 text-sm text-red-600">{catError}</div> : null}
         {catLoading ? <div className="mt-4 text-sm text-slate-600">Loading…</div> : null}
 
-        <Table headers={["Photo", "Title", "MRP", "Discount", "Sell", "Purchase", "Stock", "Active", "Created", "Actions"]}>
+        <Table headers={["Photo", "Title", "MRP", "Discount (₹)", "Discount (%)", "Sell", "Purchase", "Stock", "Active", "Created", "Actions"]}>
           {catalog.map((i) => (
             <tr key={i.id} className="border-t border-slate-200">
               <td className="px-4 py-3">
@@ -962,6 +1138,7 @@ downloadText(
               </td>
               <td className="px-4 py-3 text-slate-700">₹{i.mrp_inr}</td>
               <td className="px-4 py-3 text-slate-700">₹{i.discount_inr}</td>
+              <td className="px-4 py-3 text-slate-700">{i.discount_pct ?? (i.mrp_inr ? Math.round(((i.discount_inr ?? 0) / i.mrp_inr) * 10000) / 100 : 0)}%</td>
               <td className="px-4 py-3 text-slate-900 font-semibold">₹{(i.sell_price_inr ?? Math.max((i.mrp_inr ?? 0) - (i.discount_inr ?? 0), 0))}</td>
               <td className="px-4 py-3 text-slate-700">₹{i.purchase_price_inr}</td>
               <td className="px-4 py-3 text-slate-700">{i.stock}</td>
@@ -1015,7 +1192,22 @@ downloadText(
     type="number"
     className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none"
     value={String(catEdit.mrp_inr ?? 0)}
-    onChange={(e) => setCatEdit((s) => ({ ...(s ?? {}), mrp_inr: Number(e.target.value) }))}
+    onChange={(e) => {
+    const mrp = Number(e.target.value);
+    setCatEdit((s) => {
+      const prev = s ?? {};
+      const discInr = Number.isFinite(Number((prev as any).discount_inr)) ? Number((prev as any).discount_inr) : 0;
+      const discPct = Number.isFinite(Number((prev as any).discount_pct)) ? Number((prev as any).discount_pct) : 0;
+      let nextDiscInr = discInr;
+      let nextDiscPct = discPct;
+      if (discInr > 0) {
+        nextDiscPct = mrp > 0 ? Math.round(((discInr / mrp) * 100) * 100) / 100 : 0;
+      } else if (discPct > 0) {
+        nextDiscInr = mrp > 0 ? Math.round((mrp * discPct) / 100) : 0;
+      }
+      return { ...(prev as any), mrp_inr: mrp, discount_inr: nextDiscInr, discount_pct: nextDiscPct };
+    });
+  }}
   />
 </label>
 
@@ -1025,7 +1217,34 @@ downloadText(
     type="number"
     className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none"
     value={String(catEdit.discount_inr ?? 0)}
-    onChange={(e) => setCatEdit((s) => ({ ...(s ?? {}), discount_inr: Number(e.target.value) }))}
+    onChange={(e) => {
+    const discInr = Number(e.target.value);
+    setCatEdit((s) => {
+      const prev = s ?? {};
+      const mrp = Number.isFinite(Number((prev as any).mrp_inr)) ? Number((prev as any).mrp_inr) : 0;
+      const pct = mrp > 0 ? Math.round(((discInr / mrp) * 100) * 100) / 100 : 0;
+      return { ...(prev as any), discount_inr: discInr, discount_pct: pct };
+    });
+  }}
+  />
+</label>
+
+<label className="block sm:col-span-1">
+  <div className="mb-1 text-xs font-semibold text-slate-700">Discount (%)</div>
+  <input
+    type="number"
+    step="0.01"
+    className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none"
+    value={String(catEdit.discount_pct ?? 0)}
+    onChange={(e) => {
+      const pct = Number(e.target.value);
+      setCatEdit((s) => {
+        const prev = s ?? {};
+        const mrp = Number.isFinite(Number((prev as any).mrp_inr)) ? Number((prev as any).mrp_inr) : 0;
+        const discInr = mrp > 0 ? Math.round((mrp * pct) / 100) : 0;
+        return { ...(prev as any), discount_pct: pct, discount_inr: discInr };
+      });
+    }}
   />
 </label>
 
@@ -1125,7 +1344,162 @@ downloadText(
         ) : null}
       </Modal>
 
-      <Modal title="Orders" open={openOrders} onClose={() => setOpenOrders(false)}>
+      
+      <Modal title="Procedures" open={openProcedures} onClose={() => setOpenProcedures(false)}>
+        <Toolbar
+          onRefresh={loadProcedures}
+          onAdd={() => setProcEdit({ name: "", price_inr: 0, active: true, doctor_ids: [] })}
+          addLabel="Add procedure"
+          onExport={() => {
+            const rows = procedures.map((p) => ({
+              id: p.id,
+              name: p.name,
+              price_inr: p.price_inr ?? 0,
+              doctors: (procDoctorNames[p.id] ?? []).join("; "),
+              active: p.active,
+              created_at: p.created_at ?? "",
+            }));
+            downloadText("procedures.csv", toCsv(rows, ["id", "name", "price_inr", "doctors", "active", "created_at"]));
+          }}
+          onPrint={() => window.print()}
+        />
+
+        {procError ? <div className="mt-4 text-sm text-red-600">{procError}</div> : null}
+        {procLoading ? <div className="mt-4 text-sm text-slate-600">Loading…</div> : null}
+
+        <Table headers={["Procedure", "Price", "Doctors", "Active", "Created", "Actions"]}>
+          {procedures.map((p) => (
+            <tr key={p.id} className="border-t border-slate-200">
+              <td className="px-4 py-3">
+                <div className="font-semibold text-slate-900">{p.name}</div>
+              </td>
+              <td className="px-4 py-3 text-slate-700">₹{p.price_inr}</td>
+              <td className="px-4 py-3 text-sm text-slate-700">
+                {(procDoctorNames[p.id] ?? []).length > 0 ? (procDoctorNames[p.id] ?? []).join(", ") : "—"}
+              </td>
+              <td className="px-4 py-3">
+                <span className={cn("rounded-full px-2 py-1 text-xs font-semibold", p.active ? "bg-teal-50 text-teal-800" : "bg-slate-100 text-slate-700")}>
+                  {p.active ? "Active" : "Inactive"}
+                </span>
+              </td>
+              <td className="px-4 py-3 text-xs text-slate-500">{p.created_at ? new Date(p.created_at).toLocaleString() : "—"}</td>
+              <td className="px-4 py-3">
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                    onClick={() => setProcEdit({ ...p, doctor_ids: procDoctorIds[p.id] ?? [] })}
+                  >
+                    <Pencil className="h-4 w-4" />
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-50"
+                    onClick={() => deleteProcedure(p.id)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Delete
+                  </button>
+                </div>
+              </td>
+            </tr>
+          ))}
+        </Table>
+
+        {procedures.length === 0 && !procLoading ? (
+          <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+            No procedures yet. Click <b>Add procedure</b> to create your price list.
+          </div>
+        ) : null}
+
+        {procEdit ? (
+          <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <div className="text-sm font-bold text-slate-900">{procEdit.id ? "Edit procedure" : "Add procedure"}</div>
+            <div className="mt-3 grid gap-3 sm:grid-cols-4">
+              <label className="block sm:col-span-2">
+                <div className="mb-1 text-xs font-semibold text-slate-700">Procedure</div>
+                <input
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none"
+                  value={procEdit.name ?? ""}
+                  onChange={(e) => setProcEdit((s) => ({ ...(s ?? {}), name: e.target.value }))}
+                  placeholder="Root canal treatment"
+                />
+              </label>
+
+              <label className="block sm:col-span-1">
+                <div className="mb-1 text-xs font-semibold text-slate-700">Price (INR)</div>
+                <input
+                  type="number"
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none"
+                  value={String(procEdit.price_inr ?? 0)}
+                  onChange={(e) => setProcEdit((s) => ({ ...(s ?? {}), price_inr: Number(e.target.value) }))}
+                />
+              </label>
+
+              <label className="block sm:col-span-1">
+                <div className="mb-1 text-xs font-semibold text-slate-700">Active</div>
+                <select
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none"
+                  value={procEdit.active ? "true" : "false"}
+                  onChange={(e) => setProcEdit((s) => ({ ...(s ?? {}), active: e.target.value === "true" }))}
+                >
+                  <option value="true">true</option>
+                  <option value="false">false</option>
+                </select>
+              </label>
+
+              <label className="block sm:col-span-4">
+                <div className="mb-1 text-xs font-semibold text-slate-700">Doctors</div>
+                <div className="max-h-44 overflow-y-auto rounded-2xl border border-slate-200 bg-white p-2">
+                  {doctors.length === 0 ? (
+                    <div className="p-2 text-sm text-slate-600">No doctors found. Add doctors first.</div>
+                  ) : (
+                    doctors.map((d) => {
+                      const checked = (procEdit.doctor_ids ?? []).includes(d.id);
+                      return (
+                        <label
+                          key={d.id}
+                          className="flex cursor-pointer items-center gap-2 rounded-xl px-2 py-2 text-sm text-slate-800 hover:bg-slate-50"
+                        >
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4"
+                            checked={checked}
+                            onChange={() => toggleProcDoctor(d.id)}
+                          />
+                          <span className="font-semibold">{d.name}</span>
+                          {d.speciality ? <span className="text-xs text-slate-500">({d.speciality})</span> : null}
+                        </label>
+                      );
+                    })
+                  )}
+                </div>
+                <div className="mt-1 text-xs text-slate-600">Select one or more doctors for this procedure.</div>
+              </label>
+            </div>
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button
+                type="button"
+                className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
+                onClick={upsertProcedure}
+              >
+                Save
+              </button>
+              <button
+                type="button"
+                className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                onClick={() => setProcEdit(null)}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : null}
+      </Modal>
+
+<Modal title="Orders" open={openOrders} onClose={() => setOpenOrders(false)}>
         <Toolbar
           onRefresh={loadOrders}
           onAdd={() => alert("Orders are read-only for now. Next step: status updates via payment gateway.")}

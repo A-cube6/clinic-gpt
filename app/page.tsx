@@ -198,13 +198,13 @@ const ServicesGrid = () => (
 );
 
 // --- Products (for cart/checkout) ---
-type Product = { id: string; title: string; note: string; mrpInr: number; discountInr: number; priceInr: number; stock: number; photoUrl?: string | null };
+type Product = { id: string; title: string; note: string; mrpInr: number; discountInr: number; discountPct: number; priceInr: number; stock: number; photoUrl?: string | null };
 // Fallback products (if catalog_items isn't configured yet)
 const FALLBACK_PRODUCTS: Product[] = [
-  { id: "brush_soft", title: "Soft-Bristle Toothbrush", note: "Gentle on gums, everyday use.", mrpInr: 149, discountInr: 0, priceInr: 149, stock: 999, photoUrl: null },
-  { id: "paste_fluoride", title: "Fluoride Toothpaste", note: "Cavity protection for daily brushing.", mrpInr: 199, discountInr: 0, priceInr: 199, stock: 999, photoUrl: null },
-  { id: "floss", title: "Dental Floss", note: "For interdental cleaning.", mrpInr: 249, discountInr: 0, priceInr: 249, stock: 999, photoUrl: null },
-  { id: "mouthwash", title: "Mouthwash", note: "Fresh breath and plaque control.", mrpInr: 299, discountInr: 0, priceInr: 299, stock: 999, photoUrl: null },
+  { id: "brush_soft", title: "Soft-Bristle Toothbrush", note: "Gentle on gums, everyday use.", mrpInr: 149, discountInr: 0, discountPct: 0, priceInr: 149, stock: 999, photoUrl: null },
+  { id: "paste_fluoride", title: "Fluoride Toothpaste", note: "Cavity protection for daily brushing.", mrpInr: 199, discountInr: 0, discountPct: 0, priceInr: 199, stock: 999, photoUrl: null },
+  { id: "floss", title: "Dental Floss", note: "For interdental cleaning.", mrpInr: 249, discountInr: 0, discountPct: 0, priceInr: 249, stock: 999, photoUrl: null },
+  { id: "mouthwash", title: "Mouthwash", note: "Fresh breath and plaque control.", mrpInr: 299, discountInr: 0, discountPct: 0, priceInr: 299, stock: 999, photoUrl: null },
 ];
 
 const FAQS = [
@@ -315,7 +315,7 @@ export default function Page() {
     (async () => {
       const { data, error } = await supabase
         .from("catalog_items")
-        .select("id,title,note,mrp_inr,discount_inr,sell_price_inr,stock,photo_url,active")
+        .select("id,title,note,mrp_inr,discount_inr,discount_pct,sell_price_inr,stock,photo_url,active")
         .eq("active", true)
         .order("created_at", { ascending: false });
 
@@ -325,7 +325,7 @@ export default function Page() {
         return;
       }
 
-      const rows = (data ?? []) as Array<{ id: string; title: string; note: string | null; mrp_inr: number | null; discount_inr: number | null; sell_price_inr: number | null; stock: number | null; photo_url: string | null }>;
+      const rows = (data ?? []) as Array<{ id: string; title: string; note: string | null; mrp_inr: number | null; discount_inr: number | null; discount_pct: number | null; sell_price_inr: number | null; stock: number | null; photo_url: string | null }>;
       if (rows.length === 0) {
         setCatalogReady(false);
         return;
@@ -335,6 +335,7 @@ export default function Page() {
         rows.map((r) => {
           const mrp = r.mrp_inr ?? 0;
           const discount = r.discount_inr ?? 0;
+          const pct = r.discount_pct ?? (mrp > 0 ? Math.round(((discount / mrp) * 100) * 100) / 100 : 0);
           const sell = r.sell_price_inr ?? Math.max(mrp - discount, 0);
           return {
             id: r.id,
@@ -342,6 +343,7 @@ export default function Page() {
             note: r.note ?? "",
             mrpInr: mrp,
             discountInr: discount,
+            discountPct: pct,
             priceInr: sell,
             stock: r.stock ?? 0,
             photoUrl: r.photo_url ?? null,
@@ -796,11 +798,19 @@ export default function Page() {
                 <div className="mt-3 flex items-center justify-between gap-3">
                   <div className="text-sm">
                     <div className="font-semibold">{formatInr(p.priceInr)}</div>
-                    {p.discountInr > 0 ? (
-                      <div className="text-xs text-slate-500 line-through">{formatInr(p.mrpInr)}</div>
+                    {p.discountInr > 0 || p.discountPct > 0 ? (
+                      <div className="text-xs text-red-600 line-through">{formatInr(p.mrpInr)}</div>
                     ) : (
                       <div className="text-xs text-slate-500">MRP {formatInr(p.mrpInr)}</div>
                     )}
+
+                    {p.discountInr > 0 || p.discountPct > 0 ? (
+                      <div className="mt-1 text-xs font-semibold text-red-700">
+                        Save {formatInr(p.discountInr)}
+                        {p.discountPct > 0 ? ` (${p.discountPct}%)` : ""}
+                      </div>
+                    ) : null}
+
                     <div className={cn("text-xs", p.stock > 0 ? "text-slate-600" : "text-rose-700")}>
                       {p.stock > 0 ? `${p.stock} in stock` : "Out of stock"}
                     </div>
