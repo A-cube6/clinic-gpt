@@ -22,6 +22,7 @@ import {
   Phone,
 } from "lucide-react";
 import DoctorsFromSupabase from "@/components/home/doctors-from-supabase";
+import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 
 /**
  * Smile & Care Dental Clinic — Prototype
@@ -198,7 +199,8 @@ const ServicesGrid = () => (
 
 // --- Products (for cart/checkout) ---
 type Product = { id: string; title: string; priceInr: number; note: string };
-const PRODUCTS: Product[] = [
+// Fallback products (if catalog_items isn't configured yet)
+const FALLBACK_PRODUCTS: Product[] = [
   { id: "brush_soft", title: "Soft-Bristle Toothbrush", priceInr: 149, note: "Gentle on gums, everyday use." },
   { id: "paste_fluoride", title: "Fluoride Toothpaste", priceInr: 199, note: "Cavity protection for daily brushing." },
   { id: "floss", title: "Dental Floss", priceInr: 249, note: "For interdental cleaning." },
@@ -234,6 +236,8 @@ const NAV_ITEMS = [
 ] as const;
 
 export default function Page() {
+  const supabase = useMemo(() => createSupabaseBrowserClient(), []);
+
   // --- Mobile UI state ---
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [fabOpen, setFabOpen] = useState(false);
@@ -243,6 +247,12 @@ export default function Page() {
   const [checkoutStep, setCheckoutStep] = useState<"cart" | "details" | "pay" | "success">("cart");
   const [cart, setCart] = useState<CartItem[]>([]);
   const [paying, setPaying] = useState(false);
+  const [lastOrderId, setLastOrderId] = useState<string | null>(null);
+
+  // Catalog items (owner-managed, public readable)
+  const [products, setProducts] = useState<Product[]>(FALLBACK_PRODUCTS);
+  const [catalogReady, setCatalogReady] = useState(false);
+  const [catalogError, setCatalogError] = useState<string | null>(null);
   const [checkout, setCheckout] = useState<CheckoutForm>({
     fullName: "",
     phone: "",
@@ -269,7 +279,7 @@ export default function Page() {
       console.assert(/^[0-9]+$/.test(CLINIC.whatsappNumber), "CLINIC.whatsappNumber should be digits only");
       console.assert(CLINIC.mapQuery.length > 0, "CLINIC.mapQuery should not be empty");
       console.assert(CLINIC.phoneTel.startsWith("+"), "CLINIC.phoneTel should start with +countrycode");
-      console.assert(PRODUCTS.every((p) => p.priceInr > 0), "All products should have priceInr > 0");
+      console.assert(FALLBACK_PRODUCTS.every((p) => p.priceInr > 0), "All products should have priceInr > 0");
       console.assert(clampQty(-10) === 1, "clampQty should floor at 1");
       console.assert(clampQty(500) === 99, "clampQty should cap at 99");
       console.assert(formatInr(123).startsWith("₹"), "formatInr should prefix ₹");
@@ -300,6 +310,40 @@ export default function Page() {
     };
   }, [fabOpen]);
 
+  // Load shop catalog from Supabase (preferred over fallback)
+  useEffect(() => {
+    (async () => {
+      const { data, error } = await supabase
+        .from("catalog_items")
+        .select("id,title,note,price_inr,active")
+        .eq("active", true)
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        setCatalogError(error.message);
+        setCatalogReady(false);
+        return;
+      }
+
+      const rows = (data ?? []) as Array<{ id: string; title: string; note: string | null; price_inr: number }>;
+      if (rows.length === 0) {
+        setCatalogReady(false);
+        return;
+      }
+
+      setProducts(
+        rows.map((r) => ({
+          id: r.id,
+          title: r.title,
+          note: r.note ?? "",
+          priceInr: r.price_inr ?? 0,
+        }))
+      );
+      setCatalogReady(true);
+      setCatalogError(null);
+    })();
+  }, [supabase]);
+
   const scrollToId = (e: React.MouseEvent, id: string) => {
     e.preventDefault();
     const el = document.getElementById(id);
@@ -317,7 +361,7 @@ export default function Page() {
   const cartCount = useMemo(() => cart.reduce((a, c) => a + c.qty, 0), [cart]);
 
   const cartLines = useMemo(() => {
-    const byId = new Map(PRODUCTS.map((p) => [p.id, p] as const));
+    const byId = new Map(products.map((p) => [p.id, p] as const));
     return cart
       .map((ci) => {
         const p = byId.get(ci.productId);
@@ -325,7 +369,7 @@ export default function Page() {
         return { ...ci, product: p, lineTotal: p.priceInr * ci.qty };
       })
       .filter(Boolean) as Array<{ productId: string; qty: number; product: Product; lineTotal: number }>;
-  }, [cart]);
+  }, [cart, products]);
 
   const subTotal = useMemo(() => cartLines.reduce((a, l) => a + l.lineTotal, 0), [cartLines]);
   const shipping = useMemo(() => (subTotal > 499 ? 0 : subTotal > 0 ? 49 : 0), [subTotal]);
@@ -377,12 +421,49 @@ export default function Page() {
     if (grandTotal <= 0) return;
     setPaying(true);
     try {
+      // Step B: always create an order record securely in Supabase.
+      // Pricing is computed server-side in DB via RPC (no trusting the client totals).
+      if (!catalogReady) {
+        alert(
+          "Shop catalog is not loaded from Supabase yet.\n\nGo to Owner Dashboard → Catalog, add 1+ active items, then reload this page." +
+            (catalogError ? `\n\nCatalog error: ${catalogError}` : "")
+        );
+        return;
+      }
+
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) {
+        alert("Please sign in (owner) to test checkout while the site is locked.");
+        return;
+      }
+
+      const { data: orderId, error } = await supabase.rpc("create_shop_order", {
+        items: cart.map((ci) => ({ item_id: ci.productId, qty: ci.qty })),
+        customer: {
+          full_name: checkout.fullName,
+          phone: checkout.phone,
+          address1: checkout.address1,
+          city: checkout.city,
+          pin_code: checkout.pinCode,
+        },
+      });
+
+      if (error) {
+        console.error("create_shop_order failed", error);
+        alert(`Could not create order: ${error.message}`);
+        return;
+      }
+
+      setLastOrderId(orderId as string);
+
+      // Demo payment step (we'll replace with Razorpay in the next step)
       if (CLINIC.payments.demoMode) {
-        await new Promise((r) => setTimeout(r, 900));
+        await new Promise((r) => setTimeout(r, 650));
         setCheckoutStep("success");
         setCart([]);
         return;
       }
+
       alert("Enable real payments by adding Razorpay API routes. For now demo mode is ON.");
     } finally {
       setPaying(false);
@@ -656,7 +737,7 @@ export default function Page() {
           <SectionHeading
             eyebrow="Merchandise"
             title="Dental essentials, recommended by our clinic"
-            desc="Cart + checkout prototype included. Payments are in Demo mode right now."
+            desc="Owner-managed catalog (Supabase). Checkout creates a secure order record. Payments are still in Demo mode."
           />
 
           <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
@@ -668,7 +749,7 @@ export default function Page() {
           </div>
 
           <div className="mt-10 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {PRODUCTS.map((p) => (
+            {products.map((p) => (
               <Card key={p.id}>
                 <div className="h-36 rounded-2xl bg-slate-100" />
                 <div className="mt-4 text-sm font-semibold">{p.title}</div>
@@ -686,6 +767,16 @@ export default function Page() {
               </Card>
             ))}
           </div>
+
+          {!catalogReady ? (
+            <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+              <div className="font-semibold">Catalog not configured yet</div>
+              <div className="mt-1 text-slate-600">
+                Add items in <b>Owner Dashboard → Catalog</b>, mark them <b>active</b>, then refresh.
+              </div>
+              {catalogError ? <div className="mt-2 text-rose-700">Load error: {catalogError}</div> : null}
+            </div>
+          ) : null}
 
           <div className="mt-8 flex flex-wrap items-center gap-3">
             <button className={cn(BTN.base, BTN.primary)} onClick={openCart}>
@@ -1113,7 +1204,12 @@ export default function Page() {
               {checkoutStep === "success" ? (
                 <div className="space-y-4">
                   <div className="rounded-xl border border-teal-200 bg-teal-50 p-4 text-sm text-teal-800">
-                    Payment successful (demo). We’ll add real gateway later.
+                    Payment successful (demo). Order stored securely in Supabase.
+                    {lastOrderId ? (
+                      <div className="mt-2 text-xs text-teal-900">
+                        Order ID: <span className="font-mono font-semibold">{lastOrderId}</span>
+                      </div>
+                    ) : null}
                   </div>
                   <button type="button" className={cn(BTN.base, BTN.primary, "w-full")} onClick={closeOverlay}>
                     Close

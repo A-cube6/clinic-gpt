@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import {
   Download,
@@ -14,11 +14,32 @@ import {
   Stethoscope,
   X,
   RefreshCw,
+  ShoppingCart,
+  ChevronDown,
+  ChevronRight,
 } from "lucide-react";
 
 type StaffRow = { id: string; role: string; full_name?: string | null };
 type CustomerRow = { id: string; email: string; full_name?: string | null; phone?: string | null; created_at?: string | null };
 type CatalogRow = { id: string; title: string; note?: string | null; price_inr: number; active: boolean; created_at?: string | null };
+type OrderRow = {
+  id: string;
+  created_at?: string | null;
+  status?: string | null;
+  subtotal_inr?: number | null;
+  shipping_inr?: number | null;
+  total_inr?: number | null;
+  customer_name?: string | null;
+  customer_phone?: string | null;
+};
+
+type OrderItemRow = {
+  id: string;
+  order_id: string;
+  title: string;
+  qty: number;
+  price_inr: number;
+};
 type DoctorRow = {
   id: string;
   name: string;
@@ -223,6 +244,7 @@ export default function OwnerDashboard() {
   const [openCustomers, setOpenCustomers] = useState(false);
   const [openCatalog, setOpenCatalog] = useState(false);
   const [openDoctors, setOpenDoctors] = useState(false);
+  const [openOrders, setOpenOrders] = useState(false);
 
   // --- STAFF ---
   const [staff, setStaff] = useState<StaffRow[]>([]);
@@ -357,6 +379,56 @@ export default function OwnerDashboard() {
     await loadCatalog();
   };
 
+  // --- ORDERS (read-only for now) ---
+  const [orders, setOrders] = useState<OrderRow[]>([]);
+  const [ordersLoading, setOrdersLoading] = useState(false);
+  const [ordersError, setOrdersError] = useState<string | null>(null);
+
+  const [expandedOrders, setExpandedOrders] = useState<Record<string, boolean>>({});
+  const [orderItemsByOrder, setOrderItemsByOrder] = useState<Record<string, OrderItemRow[]>>({});
+  const [orderItemsLoading, setOrderItemsLoading] = useState<Record<string, boolean>>({});
+  const [orderItemsError, setOrderItemsError] = useState<Record<string, string | null>>({});
+
+  const loadOrders = async () => {
+    setOrdersLoading(true);
+    setOrdersError(null);
+    const { data, error } = await supabase
+      .from("orders")
+      .select("id, created_at, status, subtotal_inr, shipping_inr, total_inr, customer_name, customer_phone")
+      .order("created_at", { ascending: false })
+      .limit(50);
+    if (error) setOrdersError(error.message);
+    setOrders((data ?? []) as OrderRow[]);
+    setOrdersLoading(false);
+  };
+
+  const loadOrderItems = async (orderId: string) => {
+    setOrderItemsLoading((p) => ({ ...p, [orderId]: true }));
+    setOrderItemsError((p) => ({ ...p, [orderId]: null }));
+
+    const { data, error } = await supabase
+      .from("order_items")
+      .select("id, order_id, title, qty, price_inr")
+      .eq("order_id", orderId)
+      .order("title", { ascending: true });
+
+    if (error) {
+      setOrderItemsError((p) => ({ ...p, [orderId]: error.message }));
+      setOrderItemsByOrder((p) => ({ ...p, [orderId]: [] }));
+    } else {
+      setOrderItemsByOrder((p) => ({ ...p, [orderId]: (data ?? []) as OrderItemRow[] }));
+    }
+    setOrderItemsLoading((p) => ({ ...p, [orderId]: false }));
+  };
+
+  const toggleOrder = async (orderId: string) => {
+    const next = !(expandedOrders[orderId] ?? false);
+    setExpandedOrders((p) => ({ ...p, [orderId]: next }));
+    if (next && !orderItemsByOrder[orderId] && !orderItemsLoading[orderId]) {
+      await loadOrderItems(orderId);
+    }
+  };
+
   // --- DOCTORS ---
   const [doctors, setDoctors] = useState<DoctorRow[]>([]);
   const [docLoading, setDocLoading] = useState(false);
@@ -417,6 +489,9 @@ export default function OwnerDashboard() {
   useEffect(() => {
     if (openDoctors) loadDoctors();
   }, [openDoctors]);
+  useEffect(() => {
+    if (openOrders) loadOrders();
+  }, [openOrders]);
 
   return (
     <main className="mx-auto max-w-6xl px-4 py-14">
@@ -455,6 +530,13 @@ export default function OwnerDashboard() {
           desc="Products for shop (DB-backed)."
           cta="Manage"
           onOpen={() => setOpenCatalog(true)}
+        />
+        <CardShell
+          icon={<ShoppingCart className="h-5 w-5" />}
+          title="Orders"
+          desc="Recent shop orders (read-only)."
+          cta="View"
+          onOpen={() => setOpenOrders(true)}
         />
       </div>
 
@@ -935,6 +1017,124 @@ export default function OwnerDashboard() {
                 Cancel
               </button>
             </div>
+          </div>
+        ) : null}
+      </Modal>
+
+      <Modal title="Orders" open={openOrders} onClose={() => setOpenOrders(false)}>
+        <Toolbar
+          onRefresh={loadOrders}
+          onAdd={() => alert("Orders are read-only for now. Next step: status updates via payment gateway.")}
+          addLabel="—"
+          onExport={() => {
+            const rows = orders.map((o) => ({
+              id: o.id,
+              created_at: o.created_at ?? "",
+              status: o.status ?? "",
+              total_inr: o.total_inr ?? 0,
+              customer_name: o.customer_name ?? "",
+              customer_phone: o.customer_phone ?? "",
+            }));
+            downloadText("orders.csv", toCsv(rows, ["id", "created_at", "status", "total_inr", "customer_name", "customer_phone"])) ;
+          }}
+          onPrint={() => window.print()}
+        />
+
+        {ordersError ? <div className="mt-4 text-sm text-red-600">{ordersError}</div> : null}
+        {ordersLoading ? <div className="mt-4 text-sm text-slate-600">Loading…</div> : null}
+
+        <Table headers={["", "Created", "Customer", "Status", "Total", "Order ID"]}>
+          {orders.map((o) => {
+            const isOpen = expandedOrders[o.id] ?? false;
+            const items = orderItemsByOrder[o.id] ?? null;
+            const isLoading = orderItemsLoading[o.id] ?? false;
+            const err = orderItemsError[o.id] ?? null;
+
+            return (
+              <Fragment key={o.id}>
+                <tr className="border-t border-slate-200">
+                  <td className="px-2 py-3">
+                    <button
+                      type="button"
+                      aria-label={isOpen ? "Collapse" : "Expand"}
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                      onClick={() => toggleOrder(o.id)}
+                    >
+                      {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                    </button>
+                  </td>
+                  <td className="px-4 py-3 text-slate-700">
+                    {o.created_at ? new Date(o.created_at).toLocaleString() : "—"}
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="font-semibold text-slate-900">{o.customer_name ?? "—"}</div>
+                    <div className="text-xs text-slate-600">{o.customer_phone ?? ""}</div>
+                  </td>
+                  <td className="px-4 py-3 text-slate-700">{o.status ?? "—"}</td>
+                  <td className="px-4 py-3 font-semibold text-slate-900">₹{o.total_inr ?? 0}</td>
+                  <td className="px-4 py-3 font-mono text-xs text-slate-500">{shortId(o.id)}</td>
+                </tr>
+
+                {isOpen ? (
+                  <tr className="border-t border-slate-200 bg-slate-50">
+                    <td colSpan={6} className="px-4 py-4">
+                      <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                        <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                          <div className="text-sm font-bold text-slate-900">Order items</div>
+                          <div className="text-xs text-slate-600">
+                            Subtotal: <span className="font-semibold text-slate-900">₹{o.subtotal_inr ?? 0}</span>
+                            <span className="mx-2 text-slate-300">|</span>
+                            Shipping: <span className="font-semibold text-slate-900">₹{o.shipping_inr ?? 0}</span>
+                            <span className="mx-2 text-slate-300">|</span>
+                            Total: <span className="font-semibold text-slate-900">₹{o.total_inr ?? 0}</span>
+                          </div>
+                        </div>
+
+                        {err ? <div className="mt-3 text-sm text-red-600">{err}</div> : null}
+                        {isLoading ? <div className="mt-3 text-sm text-slate-600">Loading items…</div> : null}
+
+                        {!isLoading && !err ? (
+                          items && items.length > 0 ? (
+                            <div className="mt-3 overflow-hidden rounded-2xl border border-slate-200">
+                              <table className="w-full border-collapse text-left text-sm">
+                                <thead className="bg-slate-50">
+                                  <tr>
+                                    <th className="px-4 py-3 font-semibold text-slate-700">Item</th>
+                                    <th className="px-4 py-3 font-semibold text-slate-700">Qty</th>
+                                    <th className="px-4 py-3 font-semibold text-slate-700">Price</th>
+                                    <th className="px-4 py-3 font-semibold text-slate-700">Line total</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="bg-white">
+                                  {items.map((it) => (
+                                    <tr key={it.id} className="border-t border-slate-200">
+                                      <td className="px-4 py-3 font-semibold text-slate-900">{it.title}</td>
+                                      <td className="px-4 py-3 text-slate-700">{it.qty}</td>
+                                      <td className="px-4 py-3 text-slate-700">₹{it.price_inr}</td>
+                                      <td className="px-4 py-3 font-semibold text-slate-900">₹{it.price_inr * it.qty}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          ) : (
+                            <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+                              No order items found.
+                            </div>
+                          )
+                        ) : null}
+                      </div>
+                    </td>
+                  </tr>
+                ) : null}
+              </Fragment>
+            );
+          })}
+        </Table>
+
+        {orders.length === 0 && !ordersLoading ? (
+          <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+            No orders yet. Create one from the website Shop → Checkout.
           </div>
         ) : null}
       </Modal>
