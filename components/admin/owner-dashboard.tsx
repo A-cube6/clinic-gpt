@@ -19,9 +19,11 @@ import {
   ChevronDown,
   ChevronRight,
   SlidersHorizontal,
+  MessageCircle,
+  Wallet,
 } from "lucide-react";
 
-type StaffRow = { id: string; role: string; full_name?: string | null };
+type StaffRow = { id: string; role: string; full_name?: string | null; phone?: string | null };
 type CustomerRow = { id: string; email: string; full_name?: string | null; phone?: string | null; created_at?: string | null };
 type CatalogRow = { id: string; title: string; note?: string | null; mrp_inr: number; discount_inr: number; discount_pct: number; purchase_price_inr: number; stock: number; photo_url?: string | null; sell_price_inr?: number | null; active: boolean; created_at?: string | null };
 type OrderRow = {
@@ -71,6 +73,15 @@ type ProcedureDoctorJoinRow = {
   procedure_id: string;
   doctor_id: string;
   doctors?: { name: string } | null;
+};
+
+type FinanceRow = {
+  id: string;
+  kind: "asset" | "liability";
+  title: string;
+  amount_inr: number;
+  note?: string | null;
+  created_at?: string | null;
 };
 
 const WEEK_DAYS: Array<{ key: string; label: string }> = [
@@ -130,6 +141,14 @@ function shortId(id: string) {
   if (!id) return "";
   return `${id.slice(0, 6)}…${id.slice(-4)}`;
 }
+
+function toWhatsAppUrl(phone?: string | null): string | null {
+  if (!phone) return null;
+  const digits = phone.replace(/[^\d]/g, "");
+  if (!digits) return null;
+  return `https://wa.me/${digits}`;
+}
+
 
 function toCsv(rows: any[], headers: string[]) {
   const esc = (v: any) => {
@@ -314,6 +333,7 @@ export default function OwnerDashboard() {
   const [openDoctors, setOpenDoctors] = useState(false);
   const [openProcedures, setOpenProcedures] = useState(false);
   const [openOrders, setOpenOrders] = useState(false);
+  const [openFinance, setOpenFinance] = useState(false);
 
   // --- STAFF ---
   const [staff, setStaff] = useState<StaffRow[]>([]);
@@ -326,7 +346,7 @@ export default function OwnerDashboard() {
     setStaffError(null);
     const { data, error } = await supabase
       .from("staff_profiles")
-      .select("id, role, full_name")
+      .select("id, role, full_name, phone")
       .order("role", { ascending: true });
     if (error) setStaffError(error.message);
     setStaff((data ?? []) as StaffRow[]);
@@ -340,6 +360,7 @@ export default function OwnerDashboard() {
       id: staffEdit.id,
       role: staffEdit.role ?? "reception",
       full_name: staffEdit.full_name ?? null,
+      phone: staffEdit.phone ?? null,
     };
     const { error } = await supabase.from("staff_profiles").upsert(payload, { onConflict: "id" });
     if (error) {
@@ -667,6 +688,60 @@ export default function OwnerDashboard() {
       await loadOrderItems(orderId);
     }
   };
+  // --- ASSETS & LIABILITIES ---
+  const [finance, setFinance] = useState<FinanceRow[]>([]);
+  const [finLoading, setFinLoading] = useState(false);
+  const [finError, setFinError] = useState<string | null>(null);
+  const [finEdit, setFinEdit] = useState<Partial<FinanceRow> | null>(null);
+
+  const loadFinance = async () => {
+    setFinLoading(true);
+    setFinError(null);
+    const { data, error } = await supabase
+      .from("clinic_finance_items")
+      .select("id, kind, title, amount_inr, note, created_at")
+      .order("created_at", { ascending: false });
+    if (error) setFinError(error.message);
+    setFinance((data ?? []) as FinanceRow[]);
+    setFinLoading(false);
+  };
+
+  const saveFinance = async () => {
+    if (!finEdit?.title?.trim()) return;
+    const payload = {
+      kind: (finEdit.kind as any) ?? "liability",
+      title: finEdit.title.trim(),
+      amount_inr: Number(finEdit.amount_inr ?? 0),
+      note: finEdit.note ?? null,
+    };
+
+    // update vs insert
+    if (finEdit.id) {
+      const { error } = await supabase.from("clinic_finance_items").update(payload).eq("id", finEdit.id);
+      if (error) {
+        alert(error.message);
+        return;
+      }
+    } else {
+      const { error } = await supabase.from("clinic_finance_items").insert(payload);
+      if (error) {
+        alert(error.message);
+        return;
+      }
+    }
+
+    setFinEdit(null);
+    await loadFinance();
+  };
+
+  const deleteFinance = async (id: string) => {
+    if (!confirm("Delete this entry?")) return;
+    const { error } = await supabase.from("clinic_finance_items").delete().eq("id", id);
+    if (error) alert(error.message);
+    await loadFinance();
+  };
+
+
 
   // --- DOCTORS ---
   const [doctors, setDoctors] = useState<DoctorRow[]>([]);
@@ -765,6 +840,9 @@ export default function OwnerDashboard() {
   useEffect(() => {
     if (openOrders) loadOrders();
   }, [openOrders]);
+  useEffect(() => {
+    if (openFinance) loadFinance();
+  }, [openFinance]);
 
   return (
     <main className="mx-auto max-w-6xl px-4 py-14">
@@ -818,36 +896,58 @@ export default function OwnerDashboard() {
           cta="View"
           onOpen={() => setOpenOrders(true)}
         />
+        <CardShell
+          icon={<Wallet className="h-5 w-5" />}
+          title="Assets & liabilities"
+          desc="Track clinic assets and liabilities."
+          cta="Manage"
+          onOpen={() => setOpenFinance(true)}
+        />
+
       </div>
 
       <Modal title="Staff" open={openStaff} onClose={() => setOpenStaff(false)}>
         <Toolbar
           onRefresh={loadStaff}
-          onAdd={() => setStaffEdit({ id: "", role: "reception", full_name: "" })}
+          onAdd={() => setStaffEdit({ id: "", role: "reception", full_name: "", phone: "" })}
           addLabel="Add/Upsert"
           onExport={() => {
             const rows = staff.map((s) => ({
               id: s.id,
               full_name: s.full_name ?? "",
+              phone: s.phone ?? "",
               role: s.role,
             }));
-            downloadText("staff.csv", toCsv(rows, ["id", "full_name", "role"])) ;
+            downloadText("staff.csv", toCsv(rows, ["id", "full_name", "phone", "role"])) ;
           }}
           onPrint={() => window.print()}
         />
         {staffError ? <div className="mt-4 text-sm text-red-600">{staffError}</div> : null}
         {staffLoading ? <div className="mt-4 text-sm text-slate-600">Loading…</div> : null}
 
-        <Table headers={["Name", "Role", "User ID", "Actions"]}>
+        <Table headers={["Name", "Phone", "Role", "User ID", "Actions"]}>
           {staff.map((s) => (
             <tr key={s.id} className="border-t border-slate-200">
               <td className="px-4 py-3 font-semibold text-slate-900">
                 {s.full_name?.trim() ? s.full_name : <span className="text-slate-500">{shortId(s.id)}</span>}
               </td>
+              <td className="px-4 py-3 text-slate-700">{s.phone?.trim() ? s.phone : "—"}</td>
               <td className="px-4 py-3 text-slate-700">{s.role}</td>
               <td className="px-4 py-3 font-mono text-xs text-slate-500">{shortId(s.id)}</td>
               <td className="px-4 py-3">
                 <div className="flex flex-wrap gap-2">
+                  {toWhatsAppUrl(s.phone) ? (
+                    <a
+                      href={toWhatsAppUrl(s.phone) as string}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-green-700 hover:bg-green-50"
+                      title="WhatsApp"
+                    >
+                      <MessageCircle className="h-4 w-4" />
+                      WhatsApp
+                    </a>
+                  ) : null}
                   <button
                     type="button"
                     className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
@@ -892,6 +992,17 @@ export default function OwnerDashboard() {
                   placeholder="e.g., Anjali Sharma"
                 />
               </label>
+
+              <label className="block sm:col-span-1">
+                <div className="mb-1 text-xs font-semibold text-slate-700">Phone</div>
+                <input
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none"
+                  value={staffEdit.phone ?? ""}
+                  onChange={(e) => setStaffEdit((s) => ({ ...(s ?? {}), phone: e.target.value }))}
+                  placeholder="+91…"
+                />
+              </label>
+
               <label className="block sm:col-span-1">
                 <div className="mb-1 text-xs font-semibold text-slate-700">Role</div>
                 <select
@@ -1164,6 +1275,18 @@ export default function OwnerDashboard() {
                   <td className="px-4 py-3 text-slate-700">{d.active ? "Yes" : "No"}</td>
                   <td className="px-4 py-3">
                     <div className="flex flex-wrap gap-2">
+                      {toWhatsAppUrl(d.phone) ? (
+                        <a
+                          href={toWhatsAppUrl(d.phone) as string}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-green-700 hover:bg-green-50"
+                          title="WhatsApp"
+                        >
+                          <MessageCircle className="h-4 w-4" />
+                          WhatsApp
+                        </a>
+                      ) : null}
                       <button
                         type="button"
                         className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
@@ -1917,6 +2040,161 @@ downloadText(
           </div>
         ) : null}
       </Modal>
+
+      <Modal title="Assets & liabilities" open={openFinance} onClose={() => setOpenFinance(false)}>
+        <Toolbar
+          onRefresh={loadFinance}
+          onAdd={() => setFinEdit({ kind: "liability", title: "", amount_inr: 0, note: "" })}
+          addLabel="Add entry"
+          onExport={() => {
+            const rows = finance.map((f) => ({
+              id: f.id,
+              kind: f.kind,
+              title: f.title,
+              amount_inr: f.amount_inr ?? 0,
+              note: f.note ?? "",
+              created_at: f.created_at ?? "",
+            }));
+            downloadText(
+              "assets-liabilities.csv",
+              toCsv(rows, ["id", "kind", "title", "amount_inr", "note", "created_at"])
+            );
+          }}
+          onPrint={() => window.print()}
+        />
+
+        {finError ? <div className="mt-4 text-sm text-red-600">{finError}</div> : null}
+        {finLoading ? <div className="mt-4 text-sm text-slate-600">Loading…</div> : null}
+
+        <div className="mt-4 grid gap-3 sm:grid-cols-3">
+          <div className="rounded-2xl border border-slate-200 bg-white p-4">
+            <div className="text-xs font-semibold text-slate-600">Total assets</div>
+            <div className="mt-1 text-lg font-bold text-slate-900">
+              ₹{finance.filter((x) => x.kind === "asset").reduce((s, x) => s + Number(x.amount_inr ?? 0), 0)}
+            </div>
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-white p-4">
+            <div className="text-xs font-semibold text-slate-600">Total liabilities</div>
+            <div className="mt-1 text-lg font-bold text-slate-900">
+              ₹{finance.filter((x) => x.kind === "liability").reduce((s, x) => s + Number(x.amount_inr ?? 0), 0)}
+            </div>
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-white p-4">
+            <div className="text-xs font-semibold text-slate-600">Net</div>
+            <div className="mt-1 text-lg font-bold text-slate-900">
+              ₹{finance.reduce((s, x) => s + (x.kind === "asset" ? 1 : -1) * Number(x.amount_inr ?? 0), 0)}
+            </div>
+          </div>
+        </div>
+
+        <Table headers={["Type", "Title", "Amount", "Note", "Created", "Actions"]}>
+          {finance.map((f) => (
+            <tr key={f.id} className="border-t border-slate-200">
+              <td className="px-4 py-3">
+                <span
+                  className={cn(
+                    "inline-flex items-center rounded-full px-2 py-1 text-xs font-semibold",
+                    f.kind === "asset" ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"
+                  )}
+                >
+                  {f.kind}
+                </span>
+              </td>
+              <td className="px-4 py-3 font-semibold text-slate-900">{f.title}</td>
+              <td className="px-4 py-3 font-semibold text-slate-900">₹{Number(f.amount_inr ?? 0)}</td>
+              <td className="px-4 py-3 text-slate-700">{f.note ?? ""}</td>
+              <td className="px-4 py-3 text-xs text-slate-600">
+                {f.created_at ? new Date(f.created_at).toLocaleString() : "—"}
+              </td>
+              <td className="px-4 py-3">
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                    onClick={() => setFinEdit({ ...f })}
+                  >
+                    <Pencil className="h-4 w-4" />
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-50"
+                    onClick={() => deleteFinance(f.id)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Delete
+                  </button>
+                </div>
+              </td>
+            </tr>
+          ))}
+        </Table>
+
+        {finEdit ? (
+          <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <div className="text-sm font-bold text-slate-900">{finEdit.id ? "Edit entry" : "Add entry"}</div>
+
+            <div className="mt-3 grid gap-3 sm:grid-cols-3">
+              <label className="block">
+                <div className="mb-1 text-xs font-semibold text-slate-700">Type</div>
+                <select
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none"
+                  value={(finEdit.kind as any) ?? "liability"}
+                  onChange={(e) => setFinEdit((s) => ({ ...(s ?? {}), kind: e.target.value as any }))}
+                >
+                  <option value="asset">asset</option>
+                  <option value="liability">liability</option>
+                </select>
+              </label>
+              <label className="block sm:col-span-2">
+                <div className="mb-1 text-xs font-semibold text-slate-700">Title</div>
+                <input
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none"
+                  value={finEdit.title ?? ""}
+                  onChange={(e) => setFinEdit((s) => ({ ...(s ?? {}), title: e.target.value }))}
+                  placeholder="e.g., Dental chair EMI / X-ray machine"
+                />
+              </label>
+              <label className="block">
+                <div className="mb-1 text-xs font-semibold text-slate-700">Amount (₹)</div>
+                <input
+                  type="number"
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none"
+                  value={Number(finEdit.amount_inr ?? 0)}
+                  onChange={(e) => setFinEdit((s) => ({ ...(s ?? {}), amount_inr: Number(e.target.value) }))}
+                />
+              </label>
+              <label className="block sm:col-span-2">
+                <div className="mb-1 text-xs font-semibold text-slate-700">Note</div>
+                <input
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none"
+                  value={finEdit.note ?? ""}
+                  onChange={(e) => setFinEdit((s) => ({ ...(s ?? {}), note: e.target.value }))}
+                  placeholder="Optional"
+                />
+              </label>
+            </div>
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button
+                type="button"
+                className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
+                onClick={saveFinance}
+              >
+                Save
+              </button>
+              <button
+                type="button"
+                className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                onClick={() => setFinEdit(null)}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : null}
+      </Modal>
+
     </main>
   );
 }
