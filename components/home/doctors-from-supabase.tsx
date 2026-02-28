@@ -28,6 +28,7 @@ type Props = {
   cn: (...classes: Array<string | false | null | undefined>) => string;
   BTN: BtnTheme & { small: string };
   WhatsAppLink: (props: { children: ReactNode; className?: string }) => ReactElement;
+  onSelectDoctor?: (doctor: { id: string; name: string }) => void;
 };
 
 const WEEK_DAYS: Array<{ key: string; short: string; full: string }> = [
@@ -161,6 +162,7 @@ function DoctorCard({
   cn,
   BTN,
   WhatsAppLink: _WhatsAppLink,
+  onSelectDoctor,
   scheduleOpen,
   onOpenSchedule,
   onCloseSchedule,
@@ -170,6 +172,7 @@ function DoctorCard({
   cn: Props["cn"];
   BTN: Props["BTN"];
   WhatsAppLink: Props["WhatsAppLink"]; // kept for compatibility
+  onSelectDoctor: Props["onSelectDoctor"];
   scheduleOpen: boolean;
   onOpenSchedule: () => void;
   onCloseSchedule: () => void;
@@ -202,7 +205,10 @@ function DoctorCard({
       <div className="mt-4 flex gap-2">
         <a
           href="#book"
-          onClick={(e) => scrollToId(e, "book")}
+          onClick={(e) => {
+            onSelectDoctor?.({ id: d.id, name: d.name });
+            scrollToId(e, "book");
+          }}
           className={cn(BTN.base, BTN.primary, BTN.small, "flex-1")}
         >
           Consult
@@ -230,7 +236,7 @@ function DoctorCard({
   );
 }
 
-export default function DoctorsFromSupabase({ scrollToId, cn, BTN, WhatsAppLink }: Props) {
+export default function DoctorsFromSupabase({ scrollToId, cn, BTN, WhatsAppLink, onSelectDoctor }: Props) {
   const supabase = useMemo(() => createSupabaseBrowserClient(), []);
   const [rows, setRows] = useState<DoctorRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -296,6 +302,7 @@ export default function DoctorsFromSupabase({ scrollToId, cn, BTN, WhatsAppLink 
           cn={cn}
           BTN={BTN}
           WhatsAppLink={WhatsAppLink}
+          onSelectDoctor={onSelectDoctor}
           scheduleOpen={openScheduleId === d.id}
           onOpenSchedule={() => setOpenScheduleId(d.id)}
           onCloseSchedule={() => setOpenScheduleId(null)}

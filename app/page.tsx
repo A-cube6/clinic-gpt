@@ -267,6 +267,39 @@ const FAQS = [
 type CartItem = { productId: string; qty: number };
 type CheckoutForm = { fullName: string; phone: string; address1: string; city: string; pinCode: string };
 
+type BookingDoctor = {
+  id: string;
+  name: string;
+  weekly_schedule: Record<string, string> | null;
+  start_date: string | null;
+  end_date: string | null;
+};
+
+const WEEK_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
+type WeekKey = (typeof WEEK_KEYS)[number];
+
+function weekKeyFromISODate(dateISO: string): WeekKey {
+  const [y, m, d] = dateISO.split("-").map(Number);
+  const dt = new Date(y, m - 1, d); // local time (avoids UTC off-by-one)
+  return WEEK_KEYS[dt.getDay()];
+}
+
+function isDoctorAvailableOn(d: BookingDoctor, dateISO: string): boolean {
+  const key = weekKeyFromISODate(dateISO);
+  const raw = (d.weekly_schedule as any)?.[key];
+  const timing = typeof raw === "string" ? raw.trim() : "";
+  if (!timing) return false;
+  if (d.start_date && dateISO < d.start_date) return false;
+  if (d.end_date && dateISO > d.end_date) return false;
+  return true;
+}
+
+function timingForDay(d: BookingDoctor, dateISO: string): string {
+  const key = weekKeyFromISODate(dateISO);
+  const raw = (d.weekly_schedule as any)?.[key];
+  return typeof raw === "string" ? raw.trim() : "";
+}
+
 function formatInr(amount: number) {
   return `₹${amount}`;
 }
@@ -318,6 +351,16 @@ export default function Page() {
   const [shopOnlyInStock, setShopOnlyInStock] = useState(false);
   const [shopOnlyDiscounted, setShopOnlyDiscounted] = useState(false);
   const [shopFiltersOpen, setShopFiltersOpen] = useState(false);
+
+  // --- Booking form state ---
+  const [visitDate, setVisitDate] = useState<string>("");
+  const [bookingDoctorId, setBookingDoctorId] = useState<string>("");
+  const [bookingDoctors, setBookingDoctors] = useState<BookingDoctor[]>([]);
+  const [bookingDoctorsError, setBookingDoctorsError] = useState<string | null>(null);
+  const [bookingNotice, setBookingNotice] = useState<string | null>(null);
+  const [bookingSubmitting, setBookingSubmitting] = useState(false);
+  const [bookingResult, setBookingResult] = useState<{ ok: boolean; message: string } | null>(null);
+
 
   const fabRef = useRef<HTMLDivElement | null>(null);
 
@@ -413,6 +456,43 @@ export default function Page() {
     })();
   }, [supabase]);
 
+  // Load doctors for booking dropdown (active only)
+  useEffect(() => {
+    (async () => {
+      const { data, error } = await supabase
+        .from("doctors")
+        .select("id,name,weekly_schedule,start_date,end_date,active")
+        .eq("active", true)
+        .order("name", { ascending: true });
+
+      if (error) {
+        setBookingDoctorsError(error.message);
+        setBookingDoctors([]);
+        return;
+      }
+
+      const rows = (data ?? []) as Array<{
+        id: string;
+        name: string;
+        weekly_schedule: Record<string, string> | null;
+        start_date: string | null;
+        end_date: string | null;
+        active: boolean | null;
+      }>;
+
+      setBookingDoctors(
+        rows.map((r) => ({
+          id: r.id,
+          name: r.name,
+          weekly_schedule: r.weekly_schedule ?? null,
+          start_date: r.start_date ?? null,
+          end_date: r.end_date ?? null,
+        }))
+      );
+      setBookingDoctorsError(null);
+    })();
+  }, [supabase]);
+
   const scrollToId = (e: React.MouseEvent, id: string) => {
     e.preventDefault();
     const el = document.getElementById(id);
@@ -426,6 +506,25 @@ export default function Page() {
     el.scrollIntoView({ behavior: prefersReducedMotion ? "auto" : "smooth", block: "start" });
     history.replaceState(null, "", `#${id}`);
   };
+
+
+  const availableBookingDoctors = useMemo(() => {
+    if (!visitDate) return bookingDoctors;
+    return bookingDoctors.filter((d) => isDoctorAvailableOn(d, visitDate));
+  }, [bookingDoctors, visitDate]);
+
+  const selectedBookingDoctor = useMemo(() => {
+    return bookingDoctors.find((d) => d.id === bookingDoctorId) ?? null;
+  }, [bookingDoctors, bookingDoctorId]);
+
+  useEffect(() => {
+    if (!visitDate || !bookingDoctorId) return;
+    if (!selectedBookingDoctor) return;
+    if (isDoctorAvailableOn(selectedBookingDoctor, visitDate)) return;
+
+    setBookingDoctorId("");
+    setBookingNotice("Selected doctor is not available on that day. Please choose another date or doctor.");
+  }, [visitDate, bookingDoctorId, selectedBookingDoctor]);
 
   const cartCount = useMemo(() => cart.reduce((a, c) => a + c.qty, 0), [cart]);
 
@@ -862,6 +961,10 @@ export default function Page() {
               cn={cn}
               BTN={BTN}
               WhatsAppLink={WhatsAppLink}
+              onSelectDoctor={(doc) => {
+                setBookingDoctorId(doc.id);
+                setBookingNotice(null);
+              }}
             />
           </div>
         </div>
@@ -1240,41 +1343,191 @@ export default function Page() {
           <div className="grid gap-6 md:grid-cols-2">
             <Card>
               <form
-                onSubmit={(e) => {
+                onSubmit={async (e) => {
                   e.preventDefault();
-                  alert("Form submitted (prototype). Next step: store this in Supabase Leads table.");
+                  setBookingSubmitting(true);
+                  setBookingResult(null);
+                  setBookingNotice(null);
+
+                  try {
+                    // Guard: if date is chosen but no doctors are available, don't submit.
+                    if (visitDate && availableBookingDoctors.length === 0) {
+                      setBookingResult({
+                        ok: false,
+                        message: "No doctors are available on this date. Please choose another date.",
+                      });
+                      return;
+                    }
+
+                    const fd = new FormData(e.currentTarget);
+                    const fullName = String(fd.get("full_name") ?? "").trim();
+                    const phone = String(fd.get("phone") ?? "").trim();
+                    const service = String(fd.get("service") ?? "").trim();
+                    const date = String(fd.get("visit_date") ?? "").trim();
+                    const doctorId = String(fd.get("doctor_id") ?? "").trim();
+
+                    if (!fullName) {
+                      setBookingResult({ ok: false, message: "Please enter your full name." });
+                      return;
+                    }
+                    if (!phone) {
+                      setBookingResult({ ok: false, message: "Please enter your phone number." });
+                      return;
+                    }
+
+                    const payload: any = {
+                      full_name: fullName,
+                      phone,
+                      service: service || null,
+                      preferred_date: date || null,
+                      doctor_id: doctorId || null,
+                      status: "new",
+                      source: "web",
+                    };
+
+                    const { data, error } = await supabase
+                      .from("booking_requests")
+                      .insert(payload)
+                      .select("id")
+                      .maybeSingle();
+
+                    if (error) {
+                      setBookingResult({ ok: false, message: error.message });
+                      return;
+                    }
+
+                    const id = (data as any)?.id as string | undefined;
+                    const ref = id ? `${id.slice(0, 6)}…${id.slice(-4)}` : "";
+                    setBookingResult({
+                      ok: true,
+                      message: `Request received. Reception will call you to confirm. ${ref ? `Reference: ${ref}` : ""}`.trim(),
+                    });
+
+                    // Reset form fields
+                    (e.currentTarget as HTMLFormElement).reset();
+                    setVisitDate("");
+                    setBookingDoctorId("");
+                  } finally {
+                    setBookingSubmitting(false);
+                  }
                 }}
                 className="space-y-4"
               >
                 <div>
                   <label className="text-xs font-semibold text-slate-700">Full name</label>
                   <input
+                    name="full_name"
                     className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-teal-200"
                     placeholder="Your name"
                     required
                   />
                 </div>
+
                 <div>
                   <label className="text-xs font-semibold text-slate-700">Phone</label>
                   <input
+                    name="phone"
                     className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-teal-200"
                     placeholder="10-digit mobile"
                     required
                   />
                 </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-slate-700">Preferred visit date</label>
+                  <input
+                    name="visit_date"
+                    type="date"
+                    value={visitDate}
+                    onChange={(e) => {
+                      setVisitDate(e.target.value);
+                      setBookingNotice(null);
+                    }}
+                    className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-teal-200"
+                  />
+                  <p className="mt-1 text-xs text-slate-500">
+                    Reception will call back to confirm the exact time.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-slate-700">
+                    Doctor <span className="font-normal text-slate-500">(optional)</span>
+                  </label>
+                  <select
+                    name="doctor_id"
+                    value={bookingDoctorId}
+                    onChange={(e) => {
+                      setBookingDoctorId(e.target.value);
+                      setBookingNotice(null);
+                    }}
+                    className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-teal-200"
+                  >
+                    <option value="">Any doctor (optional)</option>
+                    {(visitDate ? availableBookingDoctors : bookingDoctors).map((d) => {
+                      const extra = visitDate ? timingForDay(d, visitDate) : "";
+                      return (
+                        <option key={d.id} value={d.id}>
+                          {d.name}{extra ? ` — ${extra}` : ""}
+                        </option>
+                      );
+                    })}
+                  </select>
+
+                  {bookingDoctorsError ? (
+                    <p className="mt-1 text-xs text-rose-700">Could not load doctors: {bookingDoctorsError}</p>
+                  ) : null}
+
+                  {visitDate && availableBookingDoctors.length === 0 ? (
+                    <p className="mt-1 text-xs text-rose-700">
+                      No doctors are available on this date. Please choose another date.
+                    </p>
+                  ) : null}
+
+                  {bookingNotice ? <p className="mt-1 text-xs text-amber-700">{bookingNotice}</p> : null}
+                </div>
+
                 <div>
                   <label className="text-xs font-semibold text-slate-700">Service</label>
-                  <select className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-teal-200">
+                  <select
+                    name="service"
+                    className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-teal-200"
+                    defaultValue={services[0]?.title ?? ""}
+                  >
                     {services.map((s) => (
-                      <option key={s.title}>{s.title}</option>
+                      <option key={s.title} value={s.title}>
+                        {s.title}
+                      </option>
                     ))}
                   </select>
                 </div>
 
-                <button type="submit" className={cn(BTN.base, BTN.primary, "w-full")}>
+                <button
+                  type="submit"
+                  disabled={bookingSubmitting || (visitDate && availableBookingDoctors.length === 0)}
+                  className={cn(
+                    BTN.base,
+                    BTN.primary,
+                    "w-full",
+                    (bookingSubmitting || (visitDate && availableBookingDoctors.length === 0)) && "opacity-60 cursor-not-allowed"
+                  )}
+                >
                   <Calendar className="h-4 w-4" />
-                  Request appointment
+                  {bookingSubmitting ? "Submitting…" : "Request appointment"}
                 </button>
+
+                {bookingResult ? (
+                  <div
+                    className={cn(
+                      "rounded-2xl border px-4 py-3 text-sm",
+                      bookingResult.ok
+                        ? "border-teal-200 bg-teal-50 text-teal-900"
+                        : "border-rose-200 bg-rose-50 text-rose-800"
+                    )}
+                  >
+                    {bookingResult.message}
+                  </div>
+                ) : null}
 
                 <div className="grid grid-cols-2 gap-3">
                   <WhatsAppLink className={cn(BTN.base, BTN.whatsapp, BTN.small)}>

@@ -21,6 +21,7 @@ import {
   SlidersHorizontal,
   MessageCircle,
   Wallet,
+  CalendarDays,
 } from "lucide-react";
 
 type StaffRow = { id: string; role: string; full_name?: string | null; phone?: string | null };
@@ -43,6 +44,19 @@ type OrderItemRow = {
   title: string;
   qty: number;
   price_inr: number;
+};
+
+type BookingRequestRow = {
+  id: string;
+  created_at?: string | null;
+  status?: string | null;
+  full_name: string;
+  phone: string;
+  service?: string | null;
+  preferred_date?: string | null;
+  doctor_id?: string | null;
+  doctor?: { name: string } | null;
+  note?: string | null;
 };
 type DoctorRow = {
   id: string;
@@ -334,6 +348,7 @@ export default function OwnerDashboard() {
   const [openProcedures, setOpenProcedures] = useState(false);
   const [openOrders, setOpenOrders] = useState(false);
   const [openFinance, setOpenFinance] = useState(false);
+  const [openBookings, setOpenBookings] = useState(false);
 
   // --- STAFF ---
   const [staff, setStaff] = useState<StaffRow[]>([]);
@@ -688,6 +703,43 @@ export default function OwnerDashboard() {
       await loadOrderItems(orderId);
     }
   };
+  // --- BOOKING REQUESTS ---
+  const [bookingReqs, setBookingReqs] = useState<BookingRequestRow[]>([]);
+  const [bookingReqsLoading, setBookingReqsLoading] = useState(false);
+  const [bookingReqsError, setBookingReqsError] = useState<string | null>(null);
+  const [bookingReqsUpdating, setBookingReqsUpdating] = useState<Record<string, boolean>>({});
+
+  const loadBookingReqs = async () => {
+    setBookingReqsLoading(true);
+    setBookingReqsError(null);
+
+    const { data, error } = await supabase
+      .from("booking_requests")
+      .select("id, created_at, status, full_name, phone, service, preferred_date, doctor_id, note, doctor:doctors(name)")
+      .order("created_at", { ascending: false })
+      .limit(200);
+
+    if (error) setBookingReqsError(error.message);
+    setBookingReqs((data ?? []) as BookingRequestRow[]);
+    setBookingReqsLoading(false);
+  };
+
+  const updateBookingStatus = async (id: string, status: string) => {
+    setBookingReqsUpdating((p) => ({ ...p, [id]: true }));
+    const { error } = await supabase.from("booking_requests").update({ status }).eq("id", id);
+    if (error) alert(error.message);
+    setBookingReqsUpdating((p) => ({ ...p, [id]: false }));
+    setBookingReqs((prev) => prev.map((r) => (r.id === id ? { ...r, status } : r)));
+  };
+
+  const deleteBookingReq = async (id: string) => {
+    if (!confirm("Delete this booking request? This cannot be undone.")) return;
+    const { error } = await supabase.from("booking_requests").delete().eq("id", id);
+    if (error) alert(error.message);
+    await loadBookingReqs();
+  };
+
+
   // --- ASSETS & LIABILITIES ---
   const [finance, setFinance] = useState<FinanceRow[]>([]);
   const [finLoading, setFinLoading] = useState(false);
@@ -841,6 +893,9 @@ export default function OwnerDashboard() {
     if (openOrders) loadOrders();
   }, [openOrders]);
   useEffect(() => {
+    if (openBookings) loadBookingReqs();
+  }, [openBookings]);
+  useEffect(() => {
     if (openFinance) loadFinance();
   }, [openFinance]);
 
@@ -895,6 +950,13 @@ export default function OwnerDashboard() {
           desc="Recent shop orders (read-only)."
           cta="View"
           onOpen={() => setOpenOrders(true)}
+        />
+        <CardShell
+          icon={<CalendarDays className="h-5 w-5" />}
+          title="Booking requests"
+          desc="Appointment requests from website."
+          cta="View"
+          onOpen={() => setOpenBookings(true)}
         />
         <CardShell
           icon={<Wallet className="h-5 w-5" />}
@@ -2037,6 +2099,96 @@ downloadText(
         {orders.length === 0 && !ordersLoading ? (
           <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
             No orders yet. Create one from the website Shop → Checkout.
+          </div>
+        ) : null}
+      </Modal>
+
+
+      <Modal title="Booking requests" open={openBookings} onClose={() => setOpenBookings(false)}>
+        <Toolbar
+          onRefresh={loadBookingReqs}
+          onAdd={() => alert("Booking requests are created from the website booking form.")}
+          addLabel="—"
+          onExport={() => {
+            const rows = bookingReqs.map((b) => ({
+              id: b.id,
+              created_at: b.created_at ?? "",
+              status: b.status ?? "",
+              full_name: b.full_name ?? "",
+              phone: b.phone ?? "",
+              preferred_date: b.preferred_date ?? "",
+              doctor: b.doctor?.name ?? "",
+              service: b.service ?? "",
+              note: b.note ?? "",
+            }));
+            downloadText(
+              "booking_requests.csv",
+              toCsv(rows, ["id", "created_at", "status", "full_name", "phone", "preferred_date", "doctor", "service", "note"])
+            );
+          }}
+          onPrint={() => window.print()}
+        />
+
+        {bookingReqsError ? <div className="mt-4 text-sm text-red-600">{bookingReqsError}</div> : null}
+        {bookingReqsLoading ? <div className="mt-4 text-sm text-slate-600">Loading…</div> : null}
+
+        <Table headers={["Created", "Patient", "Preferred date", "Doctor", "Service", "Status", "Actions"]}>
+          {bookingReqs.map((b) => (
+            <tr key={b.id} className="border-t border-slate-200">
+              <td className="px-4 py-3 text-slate-700">
+                {b.created_at ? new Date(b.created_at).toLocaleString() : "—"}
+              </td>
+              <td className="px-4 py-3">
+                <div className="font-semibold text-slate-900">{b.full_name}</div>
+                <div className="text-xs text-slate-600">{b.phone}</div>
+              </td>
+              <td className="px-4 py-3 text-slate-700">{b.preferred_date ?? "—"}</td>
+              <td className="px-4 py-3 text-slate-700">{b.doctor?.name ?? "Any"}</td>
+              <td className="px-4 py-3 text-slate-700">{b.service ?? "—"}</td>
+              <td className="px-4 py-3">
+                <select
+                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none"
+                  value={b.status ?? "new"}
+                  disabled={bookingReqsUpdating[b.id] ?? false}
+                  onChange={(e) => updateBookingStatus(b.id, e.target.value)}
+                >
+                  <option value="new">new</option>
+                  <option value="called">called</option>
+                  <option value="confirmed">confirmed</option>
+                  <option value="cancelled">cancelled</option>
+                </select>
+              </td>
+              <td className="px-4 py-3">
+                <div className="flex flex-wrap gap-2">
+                  {toWhatsAppUrl(b.phone) ? (
+                    <a
+                      href={toWhatsAppUrl(b.phone) as string}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                      title="WhatsApp"
+                    >
+                      <MessageCircle className="h-4 w-4" />
+                      WA
+                    </a>
+                  ) : null}
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                    onClick={() => deleteBookingReq(b.id)}
+                    title="Delete"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+              </td>
+            </tr>
+          ))}
+        </Table>
+
+        {bookingReqs.length === 0 && !bookingReqsLoading ? (
+          <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+            No booking requests yet. Patients create these via the website booking form.
           </div>
         ) : null}
       </Modal>
