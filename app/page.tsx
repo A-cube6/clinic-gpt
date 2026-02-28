@@ -1504,7 +1504,7 @@ export default function Page() {
 
                 <button
                   type="submit"
-                  disabled={bookingSubmitting || (visitDate && availableBookingDoctors.length === 0)}
+                  disabled={bookingSubmitting || (!!visitDate && availableBookingDoctors.length === 0)}
                   className={cn(
                     BTN.base,
                     BTN.primary,
