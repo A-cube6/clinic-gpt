@@ -1,0 +1,87 @@
+diff --git a/smileandcare-site/components/admin/owner-dashboard.tsx b/smileandcare-site/components/admin/owner-dashboard.tsx
+--- a/smileandcare-site/components/admin/owner-dashboard.tsx
++++ b/smileandcare-site/components/admin/owner-dashboard.tsx
+@@ -1,25 +1,27 @@
+ type OrderItemRow = {
+   id: string;
+   order_id: string;
+   title: string;
+   qty: number;
+   price_inr: number;
+ };
+
++type DoctorJoin = { name: string } | { name: string }[] | null;
++
+ type BookingRequestRow = {
+   id: string;
+   created_at?: string | null;
+   status?: string | null;
+   full_name: string;
+   phone: string;
+   service?: string | null;
+   preferred_date?: string | null;
+   doctor_id?: string | null;
+-  doctor?: { name: string } | null;
++  doctor?: DoctorJoin;
+   note?: string | null;
+ };
+@@ -1,20 +1,27 @@
+ function toWhatsAppUrl(phone?: string | null): string | null {
+   if (!phone) return null;
+   const digits = phone.replace(/[^\d]/g, "");
+   if (!digits) return null;
+   return `https://wa.me/${digits}`;
+ }
+
++function doctorNameFromJoin(d: DoctorJoin | undefined): string {
++  if (!d) return "";
++  return Array.isArray(d) ? (d[0]?.name ?? "") : (d.name ?? "");
++}
++
+@@ -1,30 +1,46 @@
+   const loadBookingReqs = async () => {
+     setBookingReqsLoading(true);
+     setBookingReqsError(null);
+
+     const { data, error } = await supabase
+       .from("booking_requests")
+       .select("id, created_at, status, full_name, phone, service, preferred_date, doctor_id, note, doctor:doctors(name)")
+       .order("created_at", { ascending: false })
+       .limit(200);
+
+-    if (error) setBookingReqsError(error.message);
+-    setBookingReqs((data ?? []) as BookingRequestRow[]);
+-    setBookingReqsLoading(false);
++    if (error) {
++      setBookingReqsError(error.message);
++      setBookingReqs([]);
++      setBookingReqsLoading(false);
++      return;
++    }
++
++    // Supabase embedded join can come back as an array in some cases; normalize to a single object.
++    const rows = (data ?? []).map((r: any) => ({
++      ...r,
++      doctor: Array.isArray(r.doctor) ? (r.doctor[0] ?? null) : (r.doctor ?? null),
++    })) as BookingRequestRow[];
++
++    setBookingReqs(rows);
++    setBookingReqsLoading(false);
+   };
+@@ -1,25 +1,25 @@
+           onExport={() => {
+             const rows = bookingReqs.map((b) => ({
+               id: b.id,
+               created_at: b.created_at ?? "",
+               status: b.status ?? "",
+               full_name: b.full_name ?? "",
+               phone: b.phone ?? "",
+               preferred_date: b.preferred_date ?? "",
+-              doctor: b.doctor?.name ?? "",
++              doctor: doctorNameFromJoin(b.doctor),
+               service: b.service ?? "",
+               note: b.note ?? "",
+             }));
+@@ -1,5 +1,5 @@
+-              <td className="px-4 py-3 text-slate-700">{b.doctor?.name ?? "Any"}</td>
++              <td className="px-4 py-3 text-slate-700">{doctorNameFromJoin(b.doctor) || "Any"}</td>

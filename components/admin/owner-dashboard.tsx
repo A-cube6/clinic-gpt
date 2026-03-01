@@ -46,6 +46,7 @@ type OrderItemRow = {
   price_inr: number;
 };
 
+type DoctorJoin = { name: string } | { name: string }[] | null;
 type BookingRequestRow = {
   id: string;
   created_at?: string | null;
@@ -55,7 +56,7 @@ type BookingRequestRow = {
   service?: string | null;
   preferred_date?: string | null;
   doctor_id?: string | null;
-  doctor?: { name: string } | null;
+  doctor?: DoctorJoin;
   note?: string | null;
 };
 type DoctorRow = {
@@ -719,10 +720,27 @@ export default function OwnerDashboard() {
       .order("created_at", { ascending: false })
       .limit(200);
 
-    if (error) setBookingReqsError(error.message);
-    setBookingReqs((data ?? []) as BookingRequestRow[]);
+    if (error) {
+      setBookingReqsError(error.message);
+      setBookingReqs([]);
+      setBookingReqsLoading(false);
+      return;
+    }
+
+    // Supabase embedded join can come back as an array in some cases; normalize to a single object.
+    const rows = (data ?? []).map((r: any) => ({
+      ...r,
+      doctor: Array.isArray(r.doctor) ? (r.doctor[0] ?? null) : (r.doctor ?? null),
+    })) as BookingRequestRow[];
+
+    setBookingReqs(rows);
     setBookingReqsLoading(false);
   };
+function doctorNameFromJoin(d: DoctorJoin | undefined): string {
+  if (!d) return "";
+  return Array.isArray(d) ? (d[0]?.name ?? "") : (d.name ?? "");
+}
+
 
   const updateBookingStatus = async (id: string, status: string) => {
     setBookingReqsUpdating((p) => ({ ...p, [id]: true }));
@@ -2117,7 +2135,7 @@ downloadText(
               full_name: b.full_name ?? "",
               phone: b.phone ?? "",
               preferred_date: b.preferred_date ?? "",
-              doctor: b.doctor?.name ?? "",
+              doctor: doctorNameFromJoin(b.doctor),
               service: b.service ?? "",
               note: b.note ?? "",
             }));
@@ -2143,7 +2161,7 @@ downloadText(
                 <div className="text-xs text-slate-600">{b.phone}</div>
               </td>
               <td className="px-4 py-3 text-slate-700">{b.preferred_date ?? "—"}</td>
-              <td className="px-4 py-3 text-slate-700">{b.doctor?.name ?? "Any"}</td>
+              <td className="px-4 py-3 text-slate-700">{doctorNameFromJoin(b.doctor) || "Any"}</td>
               <td className="px-4 py-3 text-slate-700">{b.service ?? "—"}</td>
               <td className="px-4 py-3">
                 <select
