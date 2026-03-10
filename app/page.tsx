@@ -54,7 +54,7 @@ const CLINIC = {
     { day: "Sunday", time: "By appointment" },
   ],
   // Payments (prototype)
-  payments: { demoMode: true, currency: "INR" as const },
+  payments: { demoMode: !process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID, currency: "INR" as const },
 } as const;
 
 const THEME = {
@@ -331,6 +331,9 @@ export default function Page() {
   const [paying, setPaying] = useState(false);
   const [lastOrderId, setLastOrderId] = useState<string | null>(null);
 
+  // Razorpay checkout script loaded?
+  const [razorpayReady, setRazorpayReady] = useState(false);
+
   // Catalog items (owner-managed, public readable)
   const [products, setProducts] = useState<Product[]>(FALLBACK_PRODUCTS);
   const [catalogReady, setCatalogReady] = useState(false);
@@ -410,6 +413,25 @@ export default function Page() {
       window.removeEventListener("pointerdown", onPointerDown);
     };
   }, [fabOpen]);
+
+
+// Load Razorpay checkout script (only needed when demoMode is OFF)
+useEffect(() => {
+  if (CLINIC.payments.demoMode) return;
+  const id = "razorpay-checkout-js";
+  if (document.getElementById(id)) {
+    setRazorpayReady(true);
+    return;
+  }
+  const s = document.createElement("script");
+  s.id = id;
+  s.src = "https://checkout.razorpay.com/v1/checkout.js";
+  s.async = true;
+  s.onload = () => setRazorpayReady(true);
+  s.onerror = () => setRazorpayReady(false);
+  document.body.appendChild(s);
+}, []);
+
 
   // Load shop catalog from Supabase (preferred over fallback)
   useEffect(() => {
@@ -689,15 +711,85 @@ export default function Page() {
 
       setLastOrderId(orderId as string);
 
-      // Demo payment step (we'll replace with Razorpay in the next step)
-      if (CLINIC.payments.demoMode) {
-        await new Promise((r) => setTimeout(r, 650));
-        setCheckoutStep("success");
-        setCart([]);
+// Demo payment step
+if (CLINIC.payments.demoMode) {
+  await new Promise((r) => setTimeout(r, 650));
+  setCheckoutStep("success");
+  setCart([]);
+  return;
+}
+
+// Real payment via Razorpay
+if (!razorpayReady || !(window as any).Razorpay) {
+  alert("Payment system is loading. Please try again in a moment.");
+  return;
+}
+
+const createRes = await fetch("/api/razorpay/create-order", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ order_id: orderId }),
+});
+
+const createJson = await createRes.json().catch(() => ({} as any));
+if (!createRes.ok) {
+  const msg = (createJson as any)?.error || "Failed to create Razorpay order.";
+  alert(msg);
+  return;
+}
+
+const { razorpay_order_id, amount_paise, key_id } = createJson as any;
+
+const rz = (window as any).Razorpay;
+const options: any = {
+  key: key_id,
+  amount: amount_paise,
+  currency: "INR",
+  name: "Smile & Care",
+  description: "Clinic order payment",
+  order_id: razorpay_order_id,
+  prefill: {
+    name: checkout.fullName ?? "",
+    contact: checkout.phone ?? "",
+  },
+  notes: {
+    internal_order_id: String(orderId),
+  },
+  modal: {
+    ondismiss: () => {
+      // User closed Razorpay checkout — keep the order in pending state
+      alert("Payment cancelled. Your order is still saved, you can try again.");
+    },
+  },
+  handler: async (resp: any) => {
+    try {
+      const verifyRes = await fetch("/api/razorpay/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          internal_order_id: orderId,
+          razorpay_order_id: resp.razorpay_order_id,
+          razorpay_payment_id: resp.razorpay_payment_id,
+          razorpay_signature: resp.razorpay_signature,
+        }),
+      });
+      const verifyJson = await verifyRes.json().catch(() => ({} as any));
+      if (!verifyRes.ok || !(verifyJson as any)?.verified) {
+        alert((verifyJson as any)?.error || "Payment verification failed. Please contact reception.");
         return;
       }
 
-      alert("Enable real payments by adding Razorpay API routes. For now demo mode is ON.");
+      setCheckoutStep("success");
+      setCart([]);
+    } catch (e: any) {
+      alert(e?.message || "Payment verification failed.");
+    }
+  },
+  theme: { color: "#0f766e" },
+};
+
+const instance = new rz(options);
+instance.open();
     } finally {
       setPaying(false);
     }
@@ -1342,77 +1434,73 @@ export default function Page() {
 
           <div className="grid gap-6 md:grid-cols-2">
             <Card>
-              <form
-                onSubmit={async (e) => {
-                  e.preventDefault();
-                  setBookingSubmitting(true);
-                  setBookingResult(null);
-                  setBookingNotice(null);
+<form
+  onSubmit={async (e) => {
+    e.preventDefault();
+    setBookingSubmitting(true);
+    setBookingResult(null);
+    setBookingNotice(null);
 
-                  try {
-                    // Guard: if date is chosen but no doctors are available, don't submit.
-                    if (visitDate && availableBookingDoctors.length === 0) {
-                      setBookingResult({
-                        ok: false,
-                        message: "No doctors are available on this date. Please choose another date.",
-                      });
-                      return;
-                    }
+    try {
+      // Guard: if date is chosen but no doctors are available, don't submit.
+      if (visitDate && availableBookingDoctors.length === 0) {
+        setBookingResult({
+          ok: false,
+          message: "No doctors are available on this date. Please choose another date.",
+        });
+        return;
+      }
 
-                    const fd = new FormData(e.currentTarget);
-                    const fullName = String(fd.get("full_name") ?? "").trim();
-                    const phone = String(fd.get("phone") ?? "").trim();
-                    const service = String(fd.get("service") ?? "").trim();
-                    const date = String(fd.get("visit_date") ?? "").trim();
-                    const doctorId = String(fd.get("doctor_id") ?? "").trim();
+      const fd = new FormData(e.currentTarget);
+      const fullName = String(fd.get("full_name") ?? "").trim();
+      const phone = String(fd.get("phone") ?? "").trim();
+      const service = String(fd.get("service") ?? "").trim();
+      const date = String(fd.get("visit_date") ?? "").trim();
+      const doctorId = String(fd.get("doctor_id") ?? "").trim();
 
-                    if (!fullName) {
-                      setBookingResult({ ok: false, message: "Please enter your full name." });
-                      return;
-                    }
-                    if (!phone) {
-                      setBookingResult({ ok: false, message: "Please enter your phone number." });
-                      return;
-                    }
+      if (!fullName) {
+        setBookingResult({ ok: false, message: "Please enter your full name." });
+        return;
+      }
+      if (!phone) {
+        setBookingResult({ ok: false, message: "Please enter your phone number." });
+        return;
+      }
 
-                    const payload: any = {
-                      full_name: fullName,
-                      phone,
-                      service: service || null,
-                      preferred_date: date || null,
-                      doctor_id: doctorId || null,
-                      status: "new",
-                      source: "web",
-                    };
+      const payload: any = {
+        full_name: fullName,
+        phone,
+        service: service || null,
+        preferred_date: date || null,
+        doctor_id: doctorId || null,
+        status: "new",
+        source: "web",
+      };
 
-                    const { data, error } = await supabase
-                      .from("booking_requests")
-                      .insert(payload)
-                      .select("id")
-                      .maybeSingle();
+      const { error } = await supabase
+        .from("booking_requests")
+        .insert(payload);
 
-                    if (error) {
-                      setBookingResult({ ok: false, message: error.message });
-                      return;
-                    }
+      if (error) {
+        setBookingResult({ ok: false, message: error.message });
+        return;
+      }
 
-                    const id = (data as any)?.id as string | undefined;
-                    const ref = id ? `${id.slice(0, 6)}…${id.slice(-4)}` : "";
-                    setBookingResult({
-                      ok: true,
-                      message: `Request received. Reception will call you to confirm. ${ref ? `Reference: ${ref}` : ""}`.trim(),
-                    });
+      setBookingResult({
+        ok: true,
+        message: "Request received. Reception will call you to confirm.",
+      });
 
-                    // Reset form fields
-                    (e.currentTarget as HTMLFormElement).reset();
-                    setVisitDate("");
-                    setBookingDoctorId("");
-                  } finally {
-                    setBookingSubmitting(false);
-                  }
-                }}
-                className="space-y-4"
-              >
+      // Reset form fields
+      (e.currentTarget as HTMLFormElement).reset();
+      setVisitDate("");
+      setBookingDoctorId("");
+    } finally {
+      setBookingSubmitting(false);
+    }
+  }}
+  className="space-y-4"
+>
                 <div>
                   <label className="text-xs font-semibold text-slate-700">Full name</label>
                   <input
