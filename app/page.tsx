@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import DoctorsFromSupabase from "@/components/home/doctors-from-supabase";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
+import AuthModal from "@/components/AuthModal";
 
 /**
  * Smile & Care Dental Clinic — Prototype
@@ -345,6 +346,7 @@ export default function Page() {
     city: "Kalyani",
     pinCode: "",
   });
+  const [authModalOpen, setAuthModalOpen] = useState(false);
 
 
   // Shop UI (search/sort/filter)
@@ -366,6 +368,20 @@ export default function Page() {
 
 
   const fabRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+  const {
+    data: { subscription },
+  } = supabase.auth.onAuthStateChange((event) => {
+    if (event === "SIGNED_IN") {
+      setAuthModalOpen(false);
+    }
+  });
+
+  return () => {
+    subscription.unsubscribe();
+  };
+}, [supabase]);
 
   useEffect(() => {
     const prefersReducedMotion =
@@ -686,11 +702,11 @@ useEffect(() => {
         return;
       }
 
-      const { data: userData } = await supabase.auth.getUser();
-      if (!userData.user) {
-        alert("Please sign in (owner) to test checkout while the site is locked.");
-        return;
-      }
+const { data: userData } = await supabase.auth.getUser();
+if (!userData.user) {
+  setAuthModalOpen(true);
+  return;
+}
 
       const { data: orderId, error } = await supabase.rpc("create_shop_order", {
         items: cart.map((ci) => ({ item_id: ci.productId, qty: ci.qty })),
@@ -1974,6 +1990,12 @@ instance.open();
           </div>
         </div>
       ) : null}
+      <AuthModal
+  open={authModalOpen}
+  onClose={() => setAuthModalOpen(false)}
+  title="Owner sign in required"
+  nextPath="/"
+/>
     </div>
   );
 }
