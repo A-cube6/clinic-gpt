@@ -6,7 +6,7 @@ const sydney = new Date(
 
 const pad = (n: number) => String(n).padStart(2, "0");
 
-export const APP_BUILD_VERSION = `${sydney.getFullYear()}-${pad(
+export const APP_BUILD_TIME = `${sydney.getFullYear()}-${pad(
   sydney.getMonth() + 1
 )}-${pad(sydney.getDate())} ${pad(sydney.getHours())}:${pad(
   sydney.getMinutes()
