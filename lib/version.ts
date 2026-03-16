@@ -1,10 +1,13 @@
-export const APP_BUILD_TIME = new Intl.DateTimeFormat("en-AU", {
-  year: "numeric",
-  month: "2-digit",
-  day: "2-digit",
-  hour: "2-digit",
-  minute: "2-digit",
-  second: "2-digit",
-  hour12: false,
-  timeZone: "Australia/Sydney",
-}).format(new Date());
+const buildTime = new Date();
+
+const sydney = new Date(
+  buildTime.toLocaleString("en-US", { timeZone: "Australia/Sydney" })
+);
+
+const pad = (n: number) => String(n).padStart(2, "0");
+
+export const APP_BUILD_VERSION = `${sydney.getFullYear()}-${pad(
+  sydney.getMonth() + 1
+)}-${pad(sydney.getDate())} ${pad(sydney.getHours())}:${pad(
+  sydney.getMinutes()
+)}:${pad(sydney.getSeconds())}`;
