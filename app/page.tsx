@@ -25,6 +25,7 @@ import {
 import DoctorsFromSupabase from "@/components/home/doctors-from-supabase";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import AuthModal from "@/components/AuthModal";
+import { APP_BUILD_TIME } from "@/lib/version";
 
 /**
  * Smile & Care Dental Clinic — Prototype
@@ -62,8 +63,6 @@ const THEME = {
   accentSolid: "bg-teal-600",
   accentSolidHover: "hover:bg-teal-700",
 } as const;
-const APP_VERSION =
-  process.env.NEXT_PUBLIC_APP_VERSION || "dev";
 
 function cn(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");
@@ -1782,7 +1781,7 @@ instance.open();
               .
             </p>
             <p className="text-xs text-slate-400 mt-1">
-              Version: {APP_VERSION}
+              Version: {APP_BUILD_TIME}
             </p>
           </div>
         </div>
