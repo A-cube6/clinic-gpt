@@ -1788,6 +1788,7 @@ instance.open();
       </footer>
 
       {/* Mobile FAB (replaces any bottom fixed action bar) */}
+      {!checkoutOpen ? (
       <div ref={fabRef} className="fixed bottom-5 right-5 z-50 md:hidden">
         {fabOpen ? (
           <div className="mb-3 flex flex-col items-end gap-2">
@@ -1842,20 +1843,21 @@ instance.open();
           {fabOpen ? <X className="h-6 w-6" /> : <Plus className="h-6 w-6" />}
         </button>
       </div>
+      ) : null}
 
       {/* Cart / checkout overlay */}
       {checkoutOpen ? (
-        <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/40 p-4 sm:items-center">
+        <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/40 p-0 sm:p-4 sm:items-center">
           <button type="button" className="absolute inset-0" aria-label="Close checkout" onClick={closeOverlay} />
-          <div className="relative w-full max-w-xl rounded-2xl border border-slate-200 bg-white shadow-xl">
-            <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+          <div className="relative flex h-[92dvh] w-full max-w-xl flex-col overflow-hidden rounded-t-3xl border border-slate-200 bg-white shadow-xl sm:h-auto sm:max-h-[90vh] sm:rounded-2xl">
+            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white px-5 py-4">
               <div className="text-sm font-bold text-slate-900">{checkoutTitle}</div>
               <button type="button" className={cn(BTN.base, BTN.outline, "px-3")} onClick={closeOverlay}>
                 <X className="h-4 w-4" />
               </button>
             </div>
 
-            <div className="p-5">
+            <div className="flex-1 overflow-y-auto p-5 pb-24 sm:pb-5">
               {checkoutStep === "cart" ? (
                 <div className="space-y-4">
                   {cartLines.length === 0 ? (
