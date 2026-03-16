@@ -749,8 +749,20 @@ const createRes = await fetch("/api/razorpay/create-order", {
 
 const createJson = await createRes.json().catch(() => ({} as any));
 if (!createRes.ok) {
-  const msg = (createJson as any)?.error || "Failed to create Razorpay order.";
-  alert(msg);
+  console.error("Razorpay create-order failed:", createJson);
+
+  const msg =
+    (createJson as any)?.details?.error?.description ||
+    (createJson as any)?.details?.description ||
+    (createJson as any)?.details?.error ||
+    (createJson as any)?.error ||
+    "Failed to create Razorpay order.";
+
+  alert(
+    typeof msg === "string"
+      ? msg
+      : JSON.stringify(createJson, null, 2)
+  );
   return;
 }
 

@@ -58,19 +58,32 @@ export async function POST(req: Request) {
     };
 
     const auth = Buffer.from(`${keyId}:${keySecret}`).toString("base64");
-    const resp = await fetch("https://api.razorpay.com/v1/orders", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Basic ${auth}`,
-      },
-      body: JSON.stringify(rzpOrderPayload),
-    });
+console.log("Razorpay create-order payload:", rzpOrderPayload);
 
-    const json = await resp.json();
-    if (!resp.ok) {
-      return NextResponse.json({ error: "Razorpay order create failed", details: json }, { status: 502 });
-    }
+const resp = await fetch("https://api.razorpay.com/v1/orders", {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+    Authorization: `Basic ${auth}`,
+  },
+  body: JSON.stringify(rzpOrderPayload),
+});
+
+const json = await resp.json().catch(() => null);
+
+console.log("Razorpay create-order status:", resp.status);
+console.log("Razorpay create-order response:", json);
+
+if (!resp.ok) {
+  return NextResponse.json(
+    {
+      error: "Razorpay order create failed",
+      status: resp.status,
+      details: json,
+    },
+    { status: 502 }
+  );
+}
 
     const razorpayOrderId = json.id as string;
 
