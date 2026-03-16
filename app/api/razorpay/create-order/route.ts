@@ -50,10 +50,11 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Invalid order amount" }, { status: 400 });
     }
 
+    const receipt = `sc_${Date.now()}_${String(order.id).replace(/-/g, "").slice(0, 8)}`;
     const rzpOrderPayload = {
       amount: amountPaise,
       currency: body.currency ?? "INR",
-      receipt: body.receipt ?? `clinic_${order.id}`,
+      receipt,
       payment_capture: 1,
     };
 
