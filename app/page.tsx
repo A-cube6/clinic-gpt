@@ -1767,7 +1767,18 @@ instance.open();
             </div>
           </div>
           <div className="mt-8 text-xs text-slate-500">
-            © {new Date().getFullYear()} {CLINIC.name}. Prototype site.
+            <p className="text-sm text-slate-500">
+              © {new Date().getFullYear()} {CLINIC.name}. Created by{" "}
+              <a
+                href="https://acubemanagement.com/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-medium hover:underline"
+              >
+                @Acube
+              </a>
+              .
+            </p>
           </div>
         </div>
       </footer>
