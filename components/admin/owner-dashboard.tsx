@@ -205,9 +205,9 @@ function CardShell({
     <button
       type="button"
       onClick={onOpen}
-      className="group w-full rounded-2xl border border-slate-200 bg-white/80 p-6 text-left shadow-sm backdrop-blur transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
+      className="group w-full rounded-2xl border border-slate-200 bg-white/80 p-4 sm:p-6 text-left shadow-sm backdrop-blur transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
     >
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
         <div className="flex items-start gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-800 transition-colors group-hover:bg-teal-600 group-hover:text-white">
             {icon}
@@ -217,7 +217,7 @@ function CardShell({
             <div className="mt-1 text-sm text-slate-600">{desc}</div>
           </div>
         </div>
-        <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 group-hover:border-teal-200 group-hover:text-teal-700">
+        <div className="self-start rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 group-hover:border-teal-200 group-hover:text-teal-700 sm:self-auto">
           {cta}
         </div>
       </div>
@@ -238,10 +238,10 @@ function Modal({
 }) {
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-[80] flex items-end justify-center bg-black/40 p-4 sm:items-center">
+    <div className="fixed inset-0 z-[80] flex items-end justify-center bg-black/40 p-0 sm:p-4 sm:items-center">
       <button type="button" className="absolute inset-0" aria-label="Close" onClick={onClose} />
-      <div className="relative flex w-full max-w-5xl max-h-[90vh] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl">
-        <div className="shrink-0 flex items-center justify-between border-b border-slate-200 bg-white px-5 py-4">
+      <div className="relative flex h-[92dvh] w-full max-w-5xl flex-col overflow-hidden rounded-t-2xl border border-slate-200 bg-white shadow-xl sm:h-auto sm:max-h-[90vh] sm:rounded-2xl">
+        <div className="shrink-0 flex items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-4 sm:px-5">
           <div className="text-sm font-bold text-slate-900">{title}</div>
           <button
             type="button"
@@ -252,7 +252,7 @@ function Modal({
             Close
           </button>
         </div>
-        <div className="flex-1 overflow-y-auto p-5">{children}</div>
+        <div className="flex-1 overflow-y-auto overscroll-contain p-4 sm:p-5">{children}</div>
       </div>
     </div>
   );
@@ -322,8 +322,8 @@ function Table({
   children: React.ReactNode;
 }) {
   return (
-    <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200">
-      <table className="w-full border-collapse text-left text-sm">
+    <div className="mt-4 overflow-x-auto overscroll-x-contain rounded-2xl border border-slate-200 touch-pan-x">
+      <table className="min-w-[720px] w-full border-collapse text-left text-sm">
         <thead className="bg-slate-50">
           <tr>
             {headers.map((h) => (
@@ -918,7 +918,7 @@ function doctorNameFromJoin(d: DoctorJoin | undefined): string {
   }, [openFinance]);
 
   return (
-    <main className="mx-auto max-w-6xl px-4 py-14">
+    <main className="mx-auto max-w-6xl px-4 py-6 sm:py-14">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Owner dashboard</h1>
@@ -926,7 +926,7 @@ function doctorNameFromJoin(d: DoctorJoin | undefined): string {
         </div>
       </div>
 
-      <div className="mt-8 grid gap-4 md:grid-cols-2">
+      <div className="mt-8 grid gap-4 sm:grid-cols-2">
         <CardShell
           icon={<Users className="h-5 w-5" />}
           title="Staff"
