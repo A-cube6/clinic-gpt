@@ -41,8 +41,8 @@ import { APP_BUILD_TIME } from "@/lib/version";
 
 // --- Quick config (edit these) ---
 const CLINIC = {
-  heroImageUrl: "/images/clinic-hero.jpg",
-  bookingImageUrl: "/images/clinic-booking.jpg",
+  heroImageUrl: "/images/clinic_hero_v2.jpeg",
+  bookingImageUrl: "/images/clinic_booking.png",
   logoUrl: "/images/logo.png",
   name: "Smile & Care Dental Clinic",
   city: "Kalyani, West Bengal",
