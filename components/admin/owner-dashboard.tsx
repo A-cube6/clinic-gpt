@@ -1220,6 +1220,13 @@ function doctorNameFromJoin(d: DoctorJoin | undefined): string {
     if (openFinance) loadFinance();
   }, [openFinance]);
 
+  const deleteDoctor = async (id: string) => {
+    if (!confirm("Delete this doctor? This cannot be undone.")) return;
+    const { error } = await supabase.from("doctors").delete().eq("id", id);
+    if (error) alert(error.message);
+    await loadDoctors();
+  };
+
   return (
     <main className="mx-auto max-w-6xl px-4 py-14">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
