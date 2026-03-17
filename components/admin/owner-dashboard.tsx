@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import {
   Download,
@@ -188,6 +188,71 @@ function downloadText(filename: string, text: string) {
   URL.revokeObjectURL(url);
 }
 
+
+function xmlEscape(value: any) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
+
+function buildExcelWorkbookXml(
+  sheets: Array<{ name: string; headers: string[]; rows: Array<Array<any>> }>
+) {
+  const worksheetXml = sheets
+    .map((sheet) => {
+      const headerRow = `<Row>${sheet.headers
+        .map((h) => `<Cell ss:StyleID="Header"><Data ss:Type="String">${xmlEscape(h)}</Data></Cell>`)
+        .join("")}</Row>`;
+
+      const dataRows = sheet.rows
+        .map(
+          (row) =>
+            `<Row>${row
+              .map((cell) => `<Cell><Data ss:Type="String">${xmlEscape(cell)}</Data></Cell>`)
+              .join("")}</Row>`
+        )
+        .join("");
+
+      return `<Worksheet ss:Name="${xmlEscape(sheet.name).slice(0, 31)}"><Table>${headerRow}${dataRows}</Table></Worksheet>`;
+    })
+    .join("");
+
+  return `<?xml version="1.0"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:o="urn:schemas-microsoft-com:office:office"
+ xmlns:x="urn:schemas-microsoft-com:office:excel"
+ xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:html="http://www.w3.org/TR/REC-html40">
+ <Styles>
+  <Style ss:ID="Header">
+   <Font ss:Bold="1"/>
+   <Interior ss:Color="#E2E8F0" ss:Pattern="Solid"/>
+  </Style>
+ </Styles>
+ ${worksheetXml}
+</Workbook>`;
+}
+
+function downloadWorkbook(
+  filename: string,
+  sheets: Array<{ name: string; headers: string[]; rows: Array<Array<any>> }>
+) {
+  const xml = buildExcelWorkbookXml(sheets);
+  const blob = new Blob([xml], { type: "application/vnd.ms-excel;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 function CardShell({
   icon,
   title,
@@ -205,9 +270,9 @@ function CardShell({
     <button
       type="button"
       onClick={onOpen}
-      className="group w-full rounded-2xl border border-slate-200 bg-white/80 p-4 sm:p-6 text-left shadow-sm backdrop-blur transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
+      className="group w-full rounded-2xl border border-slate-200 bg-white/80 p-6 text-left shadow-sm backdrop-blur transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
     >
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+      <div className="flex items-start justify-between gap-4">
         <div className="flex items-start gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-800 transition-colors group-hover:bg-teal-600 group-hover:text-white">
             {icon}
@@ -217,7 +282,7 @@ function CardShell({
             <div className="mt-1 text-sm text-slate-600">{desc}</div>
           </div>
         </div>
-        <div className="self-start rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 group-hover:border-teal-200 group-hover:text-teal-700 sm:self-auto">
+        <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 group-hover:border-teal-200 group-hover:text-teal-700">
           {cta}
         </div>
       </div>
@@ -238,10 +303,10 @@ function Modal({
 }) {
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-[80] flex items-end justify-center bg-black/40 p-0 sm:p-4 sm:items-center">
+    <div className="fixed inset-0 z-[80] flex items-end justify-center bg-black/40 p-4 sm:items-center">
       <button type="button" className="absolute inset-0" aria-label="Close" onClick={onClose} />
-      <div className="relative flex h-[92dvh] w-full max-w-5xl flex-col overflow-hidden rounded-t-2xl border border-slate-200 bg-white shadow-xl sm:h-auto sm:max-h-[90vh] sm:rounded-2xl">
-        <div className="shrink-0 flex items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-4 sm:px-5">
+      <div className="relative flex w-full max-w-5xl max-h-[90vh] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl">
+        <div className="shrink-0 flex items-center justify-between border-b border-slate-200 bg-white px-5 py-4">
           <div className="text-sm font-bold text-slate-900">{title}</div>
           <button
             type="button"
@@ -252,7 +317,7 @@ function Modal({
             Close
           </button>
         </div>
-        <div className="flex-1 overflow-y-auto overscroll-contain p-4 sm:p-5">{children}</div>
+        <div className="flex-1 overflow-y-auto p-5">{children}</div>
       </div>
     </div>
   );
@@ -322,8 +387,8 @@ function Table({
   children: React.ReactNode;
 }) {
   return (
-    <div className="mt-4 overflow-x-auto overscroll-x-contain rounded-2xl border border-slate-200 touch-pan-x">
-      <table className="min-w-[720px] w-full border-collapse text-left text-sm">
+    <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200">
+      <table className="w-full border-collapse text-left text-sm">
         <thead className="bg-slate-50">
           <tr>
             {headers.map((h) => (
@@ -341,6 +406,7 @@ function Table({
 
 export default function OwnerDashboard() {
   const supabase = useMemo(() => createSupabaseBrowserClient(), []);
+  const syncMenuRef = useRef<HTMLDivElement | null>(null);
 
   const [openStaff, setOpenStaff] = useState(false);
   const [openCustomers, setOpenCustomers] = useState(false);
@@ -350,6 +416,10 @@ export default function OwnerDashboard() {
   const [openOrders, setOpenOrders] = useState(false);
   const [openFinance, setOpenFinance] = useState(false);
   const [openBookings, setOpenBookings] = useState(false);
+
+  const [syncMenuOpen, setSyncMenuOpen] = useState(false);
+  const [syncingAll, setSyncingAll] = useState(false);
+  const [lastSyncAt, setLastSyncAt] = useState<string | null>(null);
 
   // --- STAFF ---
   const [staff, setStaff] = useState<StaffRow[]>([]);
@@ -882,12 +952,245 @@ function doctorNameFromJoin(d: DoctorJoin | undefined): string {
     await loadDoctors();
   };
 
-  const deleteDoctor = async (id: string) => {
-    if (!confirm("Delete this doctor? This cannot be undone.")) return;
-    const { error } = await supabase.from("doctors").delete().eq("id", id);
-    if (error) alert(error.message);
-    await loadDoctors();
+  const refreshAllFromDb = async () => {
+    setSyncingAll(true);
+
+    try {
+      const [
+        staffRes,
+        customersRes,
+        catalogRes,
+        doctorsRes,
+        proceduresRes,
+        ordersRes,
+        bookingsRes,
+        financeRes,
+      ] = await Promise.all([
+        supabase.from("staff_profiles").select("id, role, full_name, phone").order("role", { ascending: true }),
+        supabase.from("customers").select("id, email, full_name, phone, created_at").order("created_at", { ascending: false }),
+        supabase
+          .from("catalog_items")
+          .select("id, title, note, mrp_inr, discount_inr, discount_pct, purchase_price_inr, stock, photo_url, sell_price_inr, active, created_at")
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("doctors")
+          .select("id, name, phone, qualifications, speciality, experience, weekly_schedule, timings, start_date, end_date, active, created_at")
+          .order("created_at", { ascending: false }),
+        supabase.from("procedures").select("id, name, price_inr, active, created_at").order("created_at", { ascending: false }),
+        supabase
+          .from("orders")
+          .select("id, created_at, status, subtotal_inr, shipping_inr, total_inr, customer_name, customer_phone")
+          .order("created_at", { ascending: false })
+          .limit(50),
+        supabase
+          .from("booking_requests")
+          .select("id, created_at, status, full_name, phone, service, preferred_date, doctor_id, note, doctor:doctors(name)")
+          .order("created_at", { ascending: false })
+          .limit(200),
+        supabase.from("clinic_finance_items").select("id, kind, title, amount_inr, note, created_at").order("created_at", { ascending: false }),
+      ]);
+
+      const procedureRows = (proceduresRes.data ?? []) as ProcedureRow[];
+      const procedureIds = procedureRows.map((p) => p.id);
+      const procedureDoctorsRes = procedureIds.length
+        ? await supabase
+            .from("procedure_doctors")
+            .select("procedure_id, doctor_id, doctors(name)")
+            .in("procedure_id", procedureIds)
+        : { data: [], error: null };
+
+      const orderRows = (ordersRes.data ?? []) as OrderRow[];
+      const orderIds = orderRows.map((o) => o.id);
+      const orderItemsRes = orderIds.length
+        ? await supabase
+            .from("order_items")
+            .select("id, order_id, title, qty, price_inr")
+            .in("order_id", orderIds)
+            .order("title", { ascending: true })
+        : { data: [], error: null };
+
+      const bookingRows = ((bookingsRes.data ?? []) as any[]).map((r) => ({
+        ...r,
+        doctor: Array.isArray(r.doctor) ? (r.doctor[0] ?? null) : (r.doctor ?? null),
+      })) as BookingRequestRow[];
+
+      const procIdMap: Record<string, string[]> = {};
+      const procNameMap: Record<string, string[]> = {};
+      ((procedureDoctorsRes.data ?? []) as any[]).forEach((r) => {
+        const pid = r.procedure_id as string;
+        const did = r.doctor_id as string;
+        if (!procIdMap[pid]) procIdMap[pid] = [];
+        if (!procIdMap[pid].includes(did)) procIdMap[pid].push(did);
+        const doctorName = r.doctors?.name as string | undefined;
+        if (doctorName) {
+          if (!procNameMap[pid]) procNameMap[pid] = [];
+          if (!procNameMap[pid].includes(doctorName)) procNameMap[pid].push(doctorName);
+        }
+      });
+
+      const orderItemsMap: Record<string, OrderItemRow[]> = {};
+      ((orderItemsRes.data ?? []) as OrderItemRow[]).forEach((item) => {
+        if (!orderItemsMap[item.order_id]) orderItemsMap[item.order_id] = [];
+        orderItemsMap[item.order_id].push(item);
+      });
+
+      setStaffError(staffRes.error?.message ?? null);
+      setCustError(customersRes.error?.message ?? null);
+      setCatError(catalogRes.error?.message ?? null);
+      setDocError(doctorsRes.error?.message ?? null);
+      setProcError(proceduresRes.error?.message ?? procedureDoctorsRes.error?.message ?? null);
+      setOrdersError(ordersRes.error?.message ?? orderItemsRes.error?.message ?? null);
+      setBookingReqsError(bookingsRes.error?.message ?? null);
+      setFinError(financeRes.error?.message ?? null);
+
+      setStaff((staffRes.data ?? []) as StaffRow[]);
+      setCustomers((customersRes.data ?? []) as CustomerRow[]);
+      setCatalog((catalogRes.data ?? []) as CatalogRow[]);
+      setDoctors((doctorsRes.data ?? []) as DoctorRow[]);
+      setProcedures(procedureRows);
+      setProcDoctorIds(procIdMap);
+      setProcDoctorNames(procNameMap);
+      setOrders(orderRows);
+      setOrderItemsByOrder(orderItemsMap);
+      setBookingReqs(bookingRows);
+      setFinance((financeRes.data ?? []) as FinanceRow[]);
+
+      const now = new Date();
+      setLastSyncAt(
+        now.toLocaleString("en-AU", {
+          timeZone: "Australia/Sydney",
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+          hour12: false,
+        })
+      );
+
+      return {
+        staff: (staffRes.data ?? []) as StaffRow[],
+        customers: (customersRes.data ?? []) as CustomerRow[],
+        catalog: (catalogRes.data ?? []) as CatalogRow[],
+        doctors: (doctorsRes.data ?? []) as DoctorRow[],
+        procedures: procedureRows,
+        procDoctorIds: procIdMap,
+        procDoctorNames: procNameMap,
+        orders: orderRows,
+        orderItems: (orderItemsRes.data ?? []) as OrderItemRow[],
+        bookingReqs: bookingRows,
+        finance: (financeRes.data ?? []) as FinanceRow[],
+      };
+    } finally {
+      setSyncingAll(false);
+    }
   };
+
+  const handleDownloadAll = async () => {
+    const snapshot = await refreshAllFromDb();
+    if (!snapshot) return;
+
+    downloadWorkbook("smileandcare-owner-sync.xls", [
+      {
+        name: "Staff",
+        headers: ["id", "role", "full_name", "phone"],
+        rows: snapshot.staff.map((r) => [r.id, r.role, r.full_name ?? "", r.phone ?? ""]),
+      },
+      {
+        name: "Customers",
+        headers: ["id", "email", "full_name", "phone", "created_at"],
+        rows: snapshot.customers.map((r) => [r.id, r.email, r.full_name ?? "", r.phone ?? "", r.created_at ?? ""]),
+      },
+      {
+        name: "Doctors",
+        headers: ["id", "name", "phone", "qualifications", "speciality", "experience", "start_date", "end_date", "active", "created_at", "sun", "mon", "tue", "wed", "thu", "fri", "sat"],
+        rows: snapshot.doctors.map((r) => {
+          const ws = normalizeWeeklySchedule(r);
+          return [
+            r.id,
+            r.name,
+            r.phone ?? "",
+            r.qualifications ?? "",
+            r.speciality ?? "",
+            r.experience ?? "",
+            r.start_date ?? "",
+            r.end_date ?? "",
+            r.active ? "true" : "false",
+            r.created_at ?? "",
+            ws.sun ?? "",
+            ws.mon ?? "",
+            ws.tue ?? "",
+            ws.wed ?? "",
+            ws.thu ?? "",
+            ws.fri ?? "",
+            ws.sat ?? "",
+          ];
+        }),
+      },
+      {
+        name: "Procedures",
+        headers: ["id", "name", "price_inr", "active", "created_at", "doctor_ids", "doctor_names"],
+        rows: snapshot.procedures.map((r) => [
+          r.id,
+          r.name,
+          r.price_inr ?? 0,
+          r.active ? "true" : "false",
+          r.created_at ?? "",
+          (snapshot.procDoctorIds[r.id] ?? []).join(", "),
+          (snapshot.procDoctorNames[r.id] ?? []).join(", "),
+        ]),
+      },
+      {
+        name: "ItemCatalog",
+        headers: ["id", "title", "note", "mrp_inr", "discount_inr", "discount_pct", "purchase_price_inr", "stock", "photo_url", "sell_price_inr", "active", "created_at"],
+        rows: snapshot.catalog.map((r) => [
+          r.id, r.title, r.note ?? "", r.mrp_inr ?? 0, r.discount_inr ?? 0, r.discount_pct ?? 0, r.purchase_price_inr ?? 0, r.stock ?? 0, r.photo_url ?? "", r.sell_price_inr ?? "", r.active ? "true" : "false", r.created_at ?? ""
+        ]),
+      },
+      {
+        name: "Orders",
+        headers: ["id", "created_at", "status", "subtotal_inr", "shipping_inr", "total_inr", "customer_name", "customer_phone"],
+        rows: snapshot.orders.map((r) => [r.id, r.created_at ?? "", r.status ?? "", r.subtotal_inr ?? 0, r.shipping_inr ?? 0, r.total_inr ?? 0, r.customer_name ?? "", r.customer_phone ?? ""]),
+      },
+      {
+        name: "OrderItems",
+        headers: ["id", "order_id", "title", "qty", "price_inr"],
+        rows: snapshot.orderItems.map((r) => [r.id, r.order_id, r.title, r.qty ?? 0, r.price_inr ?? 0]),
+      },
+      {
+        name: "BookingRequests",
+        headers: ["id", "created_at", "status", "full_name", "phone", "service", "preferred_date", "doctor_id", "doctor_name", "note"],
+        rows: snapshot.bookingReqs.map((r) => [r.id, r.created_at ?? "", r.status ?? "", r.full_name, r.phone, r.service ?? "", r.preferred_date ?? "", r.doctor_id ?? "", doctorNameFromJoin(r.doctor), r.note ?? ""]),
+      },
+      {
+        name: "Finance",
+        headers: ["id", "kind", "title", "amount_inr", "note", "created_at"],
+        rows: snapshot.finance.map((r) => [r.id, r.kind, r.title, r.amount_inr ?? 0, r.note ?? "", r.created_at ?? ""]),
+      },
+    ]);
+  };
+
+  const handleUploadAll = () => {
+    alert("Upload All is not enabled yet. We will wire the import flow next.");
+  };
+
+  useEffect(() => {
+    if (!syncMenuOpen) return;
+
+    const handleClickOutside = (event: MouseEvent) => {
+      if (syncMenuRef.current && !syncMenuRef.current.contains(event.target as Node)) {
+        setSyncMenuOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [syncMenuOpen]);
+
+  useEffect(() => {
+    void refreshAllFromDb();
+  }, []);
 
   useEffect(() => {
     if (openStaff) loadStaff();
@@ -918,15 +1221,68 @@ function doctorNameFromJoin(d: DoctorJoin | undefined): string {
   }, [openFinance]);
 
   return (
-    <main className="mx-auto max-w-6xl px-4 py-6 sm:py-14">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+    <main className="mx-auto max-w-6xl px-4 py-14">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Owner dashboard</h1>
           <p className="mt-1 text-sm text-slate-600">Manage staff, customers, and catalog items.</p>
+          {lastSyncAt ? <p className="mt-1 text-xs text-slate-500">Last sync: {lastSyncAt}</p> : null}
+        </div>
+
+        <div className="hidden md:flex">
+          <div ref={syncMenuRef} className="relative">
+            <button
+              type="button"
+              onClick={() => setSyncMenuOpen((v) => !v)}
+              className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+            >
+              <RefreshCw className={cn("h-4 w-4", syncingAll && "animate-spin")} />
+              Options
+              <ChevronDown className="h-4 w-4" />
+            </button>
+
+            {syncMenuOpen ? (
+              <div className="absolute right-0 top-full z-20 mt-2 w-56 overflow-hidden rounded-2xl border border-slate-200 bg-white py-2 shadow-lg">
+                <button
+                  type="button"
+                  className="flex w-full items-center justify-between px-4 py-2.5 text-left text-sm font-medium text-slate-700 hover:bg-slate-50"
+                  onClick={async () => {
+                    setSyncMenuOpen(false);
+                    await handleDownloadAll();
+                  }}
+                >
+                  <span>Download All</span>
+                  <Download className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  className="flex w-full items-center justify-between px-4 py-2.5 text-left text-sm font-medium text-slate-700 hover:bg-slate-50"
+                  onClick={() => {
+                    setSyncMenuOpen(false);
+                    handleUploadAll();
+                  }}
+                >
+                  <span>Upload All</span>
+                  <Plus className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  className="flex w-full items-center justify-between px-4 py-2.5 text-left text-sm font-medium text-slate-700 hover:bg-slate-50"
+                  onClick={async () => {
+                    setSyncMenuOpen(false);
+                    await refreshAllFromDb();
+                  }}
+                >
+                  <span>Refresh</span>
+                  <RefreshCw className={cn("h-4 w-4", syncingAll && "animate-spin")} />
+                </button>
+              </div>
+            ) : null}
+          </div>
         </div>
       </div>
 
-      <div className="mt-8 grid gap-4 sm:grid-cols-2">
+      <div className="mt-8 grid gap-4 md:grid-cols-2">
         <CardShell
           icon={<Users className="h-5 w-5" />}
           title="Staff"
