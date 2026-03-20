@@ -888,6 +888,131 @@ function doctorNameFromJoin(d: DoctorJoin | undefined): string {
   return Array.isArray(d) ? (d[0]?.name ?? "") : (d.name ?? "");
 }
 
+function isUuidLike(value: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
+function formatReportCell(header: string, value: any) {
+  if (value === null || value === undefined || value === "") return "—";
+  if (typeof value === "boolean") return value ? "Yes" : "No";
+  const s = String(value);
+  if (isUuidLike(s)) return shortId(s);
+  return s;
+}
+
+function buildPrintHtml({
+  title,
+  columns,
+  rows,
+  subtitle,
+}: {
+  title: string;
+  columns: string[];
+  rows: Array<Record<string, any>>;
+  subtitle?: string;
+}) {
+  const printedAt = new Date().toLocaleString("en-AU", {
+    timeZone: "Australia/Sydney",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  });
+
+  const headerHtml = columns
+    .map((col) => `<th>${xmlEscape(col)}</th>`)
+    .join("");
+
+  const bodyHtml = rows.length
+    ? rows
+        .map(
+          (row) =>
+            `<tr>${columns
+              .map((col) => `<td>${xmlEscape(formatReportCell(col, row[col]))}</td>`)
+              .join("")}</tr>`
+        )
+        .join("")
+    : `<tr><td colspan="${columns.length}" class="empty">No records found for the selected view.</td></tr>`;
+
+  return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>${xmlEscape(title)} Report</title>
+  <style>
+    @page { size: A4 landscape; margin: 14mm; }
+    * { box-sizing: border-box; }
+    body { font-family: Arial, Helvetica, sans-serif; color: #0f172a; margin: 0; }
+    .report { width: 100%; }
+    .top { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; margin-bottom: 14px; }
+    .eyebrow { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.14em; color: #0f766e; }
+    h1 { margin: 4px 0 0; font-size: 22px; line-height: 1.2; }
+    .meta { text-align: right; font-size: 11px; color: #475569; }
+    .subtitle { margin: 8px 0 14px; font-size: 12px; color: #334155; }
+    table { width: 100%; border-collapse: collapse; table-layout: auto; }
+    thead th { background: #e2e8f0; color: #0f172a; font-size: 11px; text-align: left; padding: 8px 10px; border: 1px solid #cbd5e1; }
+    tbody td { font-size: 10.5px; padding: 7px 10px; border: 1px solid #cbd5e1; vertical-align: top; word-break: break-word; }
+    tbody tr:nth-child(even) td { background: #f8fafc; }
+    .empty { text-align: center; color: #64748b; padding: 18px; }
+    .footer { margin-top: 12px; font-size: 10px; color: #64748b; }
+  </style>
+</head>
+<body>
+  <div class="report">
+    <div class="top">
+      <div>
+        <div class="eyebrow">Smile &amp; Care • Dashboard Report</div>
+        <h1>${xmlEscape(title)}</h1>
+      </div>
+      <div class="meta">
+        <div><strong>Printed:</strong> ${xmlEscape(printedAt)}</div>
+        <div><strong>Rows:</strong> ${rows.length}</div>
+      </div>
+    </div>
+    ${subtitle ? `<div class="subtitle">${xmlEscape(subtitle)}</div>` : ""}
+    <table>
+      <thead><tr>${headerHtml}</tr></thead>
+      <tbody>${bodyHtml}</tbody>
+    </table>
+    <div class="footer">UUID fields are shown in truncated form in the report for readability.</div>
+  </div>
+  <script>
+    window.addEventListener("load", function () {
+      window.print();
+    });
+  </script>
+</body>
+</html>`;
+}
+
+function openPrintReport({
+  title,
+  columns,
+  rows,
+  subtitle,
+}: {
+  title: string;
+  columns: string[];
+  rows: Array<Record<string, any>>;
+  subtitle?: string;
+}) {
+  const popup = window.open("", "_blank", "width=1400,height=900");
+  if (!popup) {
+    alert("Unable to open the print preview. Please allow pop-ups for this site.");
+    return;
+  }
+
+  const html = buildPrintHtml({ title, columns, rows, subtitle });
+
+  popup.document.open();
+  popup.document.write(html);
+  popup.document.close();
+  popup.focus();
+}
+
 
   const updateBookingStatus = async (id: string, status: string) => {
     setBookingReqsUpdating((p) => ({ ...p, [id]: true }));
@@ -1034,6 +1159,212 @@ function doctorNameFromJoin(d: DoctorJoin | undefined): string {
     const { error } = await supabase.from("doctors").delete().eq("id", id);
     if (error) alert(error.message);
     await loadDoctors();
+  };
+
+  const printStaffReport = () => {
+    openPrintReport({
+      title: "Staff Report",
+      columns: ["Name", "Phone", "Role", "User ID"],
+      rows: staff.map((s) => ({
+        Name: s.full_name?.trim() ? s.full_name : "—",
+        Phone: s.phone ?? "—",
+        Role: s.role,
+        "User ID": s.id,
+      })),
+    });
+  };
+
+  const printCustomersReport = () => {
+    openPrintReport({
+      title: "Customers Report",
+      columns: ["Name", "Email", "Phone", "Created", "Customer ID"],
+      rows: customers.map((c) => ({
+        Name: c.full_name?.trim() ? c.full_name : "—",
+        Email: c.email,
+        Phone: c.phone ?? "—",
+        Created: c.created_at ? new Date(c.created_at).toLocaleString() : "—",
+        "Customer ID": c.id,
+      })),
+    });
+  };
+
+  const printDoctorsReport = () => {
+    openPrintReport({
+      title: "Doctors Report",
+      columns: [
+        "Name",
+        "Phone",
+        "Qualifications",
+        "Speciality",
+        "Experience",
+        "Start Date",
+        "End Date",
+        "Active",
+        "Created At",
+        "Sunday",
+        "Monday",
+        "Tuesday",
+        "Wednesday",
+        "Thursday",
+        "Friday",
+        "Saturday",
+        "Doctor ID",
+      ],
+      rows: doctors.map((d) => {
+        const ws = normalizeWeeklySchedule(d);
+        return {
+          Name: d.name,
+          Phone: d.phone ?? "—",
+          Qualifications: d.qualifications ?? "—",
+          Speciality: d.speciality ?? "—",
+          Experience: d.experience ?? "—",
+          "Start Date": d.start_date ?? "—",
+          "End Date": d.end_date ?? "—",
+          Active: d.active,
+          "Created At": d.created_at ? new Date(d.created_at).toLocaleString() : "—",
+          Sunday: ws.sun ?? "—",
+          Monday: ws.mon ?? "—",
+          Tuesday: ws.tue ?? "—",
+          Wednesday: ws.wed ?? "—",
+          Thursday: ws.thu ?? "—",
+          Friday: ws.fri ?? "—",
+          Saturday: ws.sat ?? "—",
+          "Doctor ID": d.id,
+        };
+      }),
+    });
+  };
+
+  const printCatalogReport = () => {
+    openPrintReport({
+      title: "Item Catalog Report",
+      columns: [
+        "Title",
+        "Note",
+        "MRP",
+        "Discount INR",
+        "Discount %",
+        "Purchase Price",
+        "Stock",
+        "Sell Price",
+        "Photo URL",
+        "Active",
+        "Created At",
+        "Item ID",
+      ],
+      rows: catalog.map((c) => ({
+        Title: c.title,
+        Note: c.note ?? "—",
+        MRP: c.mrp_inr,
+        "Discount INR": c.discount_inr,
+        "Discount %": c.discount_pct,
+        "Purchase Price": c.purchase_price_inr,
+        Stock: c.stock,
+        "Sell Price": c.sell_price_inr ?? "—",
+        "Photo URL": c.photo_url ?? "—",
+        Active: c.active,
+        "Created At": c.created_at ? new Date(c.created_at).toLocaleString() : "—",
+        "Item ID": c.id,
+      })),
+    });
+  };
+
+  const printProceduresReport = () => {
+    openPrintReport({
+      title: "Procedures Report",
+      columns: ["Name", "Price", "Active", "Assigned Doctors", "Created At", "Procedure ID"],
+      rows: procedures.map((p) => ({
+        Name: p.name,
+        Price: p.price_inr,
+        Active: p.active,
+        "Assigned Doctors": (procDoctorNames[p.id] ?? []).join(", ") || "—",
+        "Created At": p.created_at ? new Date(p.created_at).toLocaleString() : "—",
+        "Procedure ID": p.id,
+      })),
+    });
+  };
+
+  const printOrdersReport = () => {
+    const subtitle = ordersDateFrom || ordersDateTo
+      ? `Created date filter • From: ${ordersDateFrom || "Any"} • To: ${ordersDateTo || "Any"}`
+      : "Created date filter • All dates";
+
+    openPrintReport({
+      title: "Orders Report",
+      subtitle,
+      columns: [
+        "Created",
+        "Customer",
+        "Phone",
+        "Status",
+        "Subtotal",
+        "Shipping",
+        "Total",
+        "Razorpay Order ID",
+        "Razorpay Payment ID",
+        "Order ID",
+      ],
+      rows: filteredOrders.map((o) => ({
+        Created: o.created_at ? new Date(o.created_at).toLocaleString() : "—",
+        Customer: o.customer_name ?? "—",
+        Phone: o.customer_phone ?? "—",
+        Status: o.status ?? "—",
+        Subtotal: o.subtotal_inr ?? 0,
+        Shipping: o.shipping_inr ?? 0,
+        Total: o.total_inr ?? 0,
+        "Razorpay Order ID": o.provider_order_id ?? "—",
+        "Razorpay Payment ID": o.provider_payment_id ?? "—",
+        "Order ID": o.id,
+      })),
+    });
+  };
+
+  const printBookingsReport = () => {
+    const subtitle = bookingDateFrom || bookingDateTo
+      ? `Created date filter • From: ${bookingDateFrom || "Any"} • To: ${bookingDateTo || "Any"}`
+      : "Created date filter • All dates";
+
+    openPrintReport({
+      title: "Booking Requests Report",
+      subtitle,
+      columns: [
+        "Created",
+        "Patient",
+        "Phone",
+        "Preferred Date",
+        "Doctor",
+        "Service",
+        "Status",
+        "Note",
+        "Booking ID",
+      ],
+      rows: filteredBookingReqs.map((b) => ({
+        Created: b.created_at ? new Date(b.created_at).toLocaleString() : "—",
+        Patient: b.full_name,
+        Phone: b.phone,
+        "Preferred Date": b.preferred_date ?? "—",
+        Doctor: doctorNameFromJoin(b.doctor) || "Any",
+        Service: b.service ?? "—",
+        Status: b.status ?? "—",
+        Note: b.note ?? "—",
+        "Booking ID": b.id,
+      })),
+    });
+  };
+
+  const printFinanceReport = () => {
+    openPrintReport({
+      title: "Assets & Liabilities Report",
+      columns: ["Type", "Title", "Amount", "Note", "Created", "Finance ID"],
+      rows: finance.map((f) => ({
+        Type: f.kind,
+        Title: f.title,
+        Amount: f.amount_inr,
+        Note: f.note ?? "—",
+        Created: f.created_at ? new Date(f.created_at).toLocaleString() : "—",
+        "Finance ID": f.id,
+      })),
+    });
   };
 
   const refreshAllFromDb = async () => {
@@ -1540,7 +1871,7 @@ function doctorNameFromJoin(d: DoctorJoin | undefined): string {
             }));
             downloadText("staff.csv", toCsv(rows, ["id", "full_name", "phone", "role"])) ;
           }}
-          onPrint={() => window.print()}
+          onPrint={printStaffReport}
         />
         {staffError ? <div className="mt-4 text-sm text-red-600">{staffError}</div> : null}
         {staffLoading ? <div className="mt-4 text-sm text-slate-600">Loading…</div> : null}
@@ -1674,7 +2005,7 @@ function doctorNameFromJoin(d: DoctorJoin | undefined): string {
             }));
             downloadText("customers.csv", toCsv(rows, ["id", "email", "full_name", "phone", "created_at"])) ;
           }}
-          onPrint={() => window.print()}
+          onPrint={printCustomersReport}
         />
         {custError ? <div className="mt-4 text-sm text-red-600">{custError}</div> : null}
         {custLoading ? <div className="mt-4 text-sm text-slate-600">Loading…</div> : null}
@@ -1811,7 +2142,7 @@ function doctorNameFromJoin(d: DoctorJoin | undefined): string {
               ])
             );
           }}
-          onPrint={() => window.print()}
+          onPrint={printDoctorsReport}
         />
 
         <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
@@ -2155,7 +2486,7 @@ downloadText(
   ])
 );
           }}
-          onPrint={() => window.print()}
+          onPrint={printCatalogReport}
         />
         {catError ? <div className="mt-4 text-sm text-red-600">{catError}</div> : null}
         {catLoading ? <div className="mt-4 text-sm text-slate-600">Loading…</div> : null}
@@ -2405,7 +2736,7 @@ downloadText(
             }));
             downloadText("procedures.csv", toCsv(rows, ["id", "name", "price_inr", "doctors", "active", "created_at"]));
           }}
-          onPrint={() => window.print()}
+          onPrint={printProceduresReport}
         />
 
         {procError ? <div className="mt-4 text-sm text-red-600">{procError}</div> : null}
@@ -2561,7 +2892,7 @@ downloadText(
             }));
             downloadText("orders.csv", toCsv(rows, ["id", "created_at", "status", "total_inr", "customer_name", "customer_phone", "provider_order_id", "provider_payment_id"])) ;
           }}
-          onPrint={() => window.print()}
+          onPrint={printOrdersReport}
         />
 
         {ordersError ? <div className="mt-4 text-sm text-red-600">{ordersError}</div> : null}
@@ -2735,7 +3066,7 @@ downloadText(
               toCsv(rows, ["id", "created_at", "status", "full_name", "phone", "preferred_date", "doctor", "service", "note"])
             );
           }}
-          onPrint={() => window.print()}
+          onPrint={printBookingsReport}
         />
 
         {bookingReqsError ? <div className="mt-4 text-sm text-red-600">{bookingReqsError}</div> : null}
@@ -2857,7 +3188,7 @@ downloadText(
               toCsv(rows, ["id", "kind", "title", "amount_inr", "note", "created_at"])
             );
           }}
-          onPrint={() => window.print()}
+          onPrint={printFinanceReport}
         />
 
         {finError ? <div className="mt-4 text-sm text-red-600">{finError}</div> : null}
