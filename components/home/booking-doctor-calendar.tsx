@@ -38,6 +38,16 @@ function addMonths(date: Date, months: number): Date {
   return new Date(date.getFullYear(), date.getMonth() + months, 1);
 }
 
+function addDays(date: Date, days: number): Date {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+}
+
+function startOfWeek(date: Date): Date {
+  return addDays(date, -date.getDay());
+}
+
 function isoDate(date: Date): string {
   const y = date.getFullYear();
   const m = `${date.getMonth() + 1}`.padStart(2, "0");
@@ -82,11 +92,14 @@ function monthGrid(month: Date): Date[] {
   });
 }
 
+function weekRange(date: Date): Date[] {
+  const start = startOfWeek(date);
+  return Array.from({ length: 7 }, (_, i) => addDays(start, i));
+}
+
 export default function BookingDoctorCalendar({ doctor, selectedDate, onSelectDate }: Props) {
   const supabase = useMemo(() => createSupabaseBrowserClient(), []);
-  const [visibleMonth, setVisibleMonth] = useState<Date>(() =>
-    startOfMonth(selectedDate ? dateFromISO(selectedDate) : new Date())
-  );
+  const [visibleDate, setVisibleDate] = useState<Date>(() => (selectedDate ? dateFromISO(selectedDate) : new Date()));
   const [bookingsByDate, setBookingsByDate] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -94,6 +107,7 @@ export default function BookingDoctorCalendar({ doctor, selectedDate, onSelectDa
   useEffect(() => {
     if (!doctor) return;
 
+    const visibleMonth = startOfMonth(visibleDate);
     const rangeStart = startOfMonth(addMonths(visibleMonth, -1));
     const rangeEnd = endOfMonth(addMonths(visibleMonth, 2));
 
@@ -131,10 +145,24 @@ export default function BookingDoctorCalendar({ doctor, selectedDate, onSelectDa
     return () => {
       cancelled = true;
     };
-  }, [doctor, supabase, visibleMonth]);
+  }, [doctor, supabase, visibleDate]);
 
+  const visibleMonth = useMemo(() => startOfMonth(visibleDate), [visibleDate]);
   const days = useMemo(() => monthGrid(visibleMonth), [visibleMonth]);
+  const weekDays = useMemo(() => weekRange(visibleDate), [visibleDate]);
   const monthLabel = visibleMonth.toLocaleDateString("en-IN", { month: "long", year: "numeric" });
+  const weekLabel = useMemo(() => {
+    const first = weekDays[0];
+    const last = weekDays[6];
+    const sameMonth = first.getMonth() === last.getMonth() && first.getFullYear() === last.getFullYear();
+    if (sameMonth) {
+      return `${first.toLocaleDateString("en-IN", { month: "short" })} ${first.getDate()}-${last.getDate()}`;
+    }
+    return `${first.toLocaleDateString("en-IN", { month: "short", day: "numeric" })} - ${last.toLocaleDateString("en-IN", {
+      month: "short",
+      day: "numeric",
+    })}`;
+  }, [weekDays]);
 
   if (!doctor) {
     return (
@@ -156,10 +184,81 @@ export default function BookingDoctorCalendar({ doctor, selectedDate, onSelectDa
         {loading ? <Loader2 className="mt-1 h-4 w-4 animate-spin text-slate-400" /> : null}
       </div>
 
-      <div className="mt-5 flex items-center justify-between">
+      <div className="mt-5 flex items-center justify-between md:hidden">
         <button
           type="button"
-          onClick={() => setVisibleMonth((prev) => addMonths(prev, -1))}
+          onClick={() => setVisibleDate((prev) => addDays(prev, -7))}
+          className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+          aria-label="Previous week"
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </button>
+        <div className="text-center">
+          <div className="text-sm font-semibold text-slate-900">{weekLabel}</div>
+          <div className="text-[11px] uppercase tracking-wide text-slate-500">{monthLabel}</div>
+        </div>
+        <button
+          type="button"
+          onClick={() => setVisibleDate((prev) => addDays(prev, 7))}
+          className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+          aria-label="Next week"
+        >
+          <ChevronRight className="h-4 w-4" />
+        </button>
+      </div>
+
+      <div className="mt-4 grid grid-cols-7 gap-2 md:hidden">
+        {weekDays.map((day) => {
+          const dateISO = isoDate(day);
+          const isSelected = selectedDate === dateISO;
+          const available = isDoctorAvailableOn(doctor, dateISO);
+          const bookedCount = bookingsByDate[dateISO] ?? 0;
+
+          const palette = bookedCount > 0
+            ? "border-amber-200 bg-amber-50 text-amber-900"
+            : available
+              ? "border-teal-200 bg-teal-50 text-teal-900 hover:bg-teal-100"
+              : "border-slate-200 bg-slate-100 text-slate-500";
+
+          return (
+            <button
+              key={dateISO}
+              type="button"
+              onClick={() => {
+                if (!available) return;
+                onSelectDate(dateISO);
+              }}
+              disabled={!available}
+              title={available ? timingForDay(doctor, dateISO) : "Doctor not available"}
+              className={[
+                "min-h-[92px] rounded-2xl border px-1 py-2 text-center transition",
+                palette,
+                isSelected ? "ring-2 ring-teal-500 ring-offset-2" : "",
+                !available ? "cursor-not-allowed" : "cursor-pointer",
+              ].join(" ")}
+            >
+              <div className="text-[10px] font-semibold uppercase tracking-wide">{WEEK_LABELS[day.getDay()]}</div>
+              <div className="mt-1 text-lg font-bold">{day.getDate()}</div>
+              <div className="mt-3 flex justify-center">
+                <span
+                  className={[
+                    "h-2.5 w-2.5 rounded-full",
+                    bookedCount > 0 ? "bg-amber-500" : available ? "bg-teal-500" : "bg-slate-400",
+                  ].join(" ")}
+                />
+              </div>
+              <div className="mt-2 text-[10px] font-medium">
+                {bookedCount > 0 ? `${bookedCount} booked` : available ? "Open" : "Off"}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="mt-5 hidden items-center justify-between md:flex">
+        <button
+          type="button"
+          onClick={() => setVisibleDate((prev) => addMonths(prev, -1))}
           className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
           aria-label="Previous month"
         >
@@ -168,7 +267,7 @@ export default function BookingDoctorCalendar({ doctor, selectedDate, onSelectDa
         <div className="text-sm font-semibold text-slate-900">{monthLabel}</div>
         <button
           type="button"
-          onClick={() => setVisibleMonth((prev) => addMonths(prev, 1))}
+          onClick={() => setVisibleDate((prev) => addMonths(prev, 1))}
           className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
           aria-label="Next month"
         >
@@ -176,7 +275,7 @@ export default function BookingDoctorCalendar({ doctor, selectedDate, onSelectDa
         </button>
       </div>
 
-      <div className="mt-4 grid grid-cols-7 gap-2">
+      <div className="mt-4 hidden grid-cols-7 gap-2 md:grid">
         {WEEK_LABELS.map((label) => (
           <div key={label} className="px-1 text-center text-[11px] font-semibold uppercase tracking-wide text-slate-500">
             {label}
