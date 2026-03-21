@@ -23,6 +23,7 @@ import {
   Search,
 } from "lucide-react";
 import DoctorsFromSupabase from "@/components/home/doctors-from-supabase";
+import BookingDoctorCalendar, { type BookingCalendarDoctor } from "@/components/home/booking-doctor-calendar";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import AuthModal from "@/components/AuthModal";
 import { APP_BUILD_TIME } from "@/lib/version";
@@ -271,13 +272,7 @@ const FAQS = [
 type CartItem = { productId: string; qty: number };
 type CheckoutForm = { fullName: string; phone: string; address1: string; city: string; pinCode: string };
 
-type BookingDoctor = {
-  id: string;
-  name: string;
-  weekly_schedule: Record<string, string> | null;
-  start_date: string | null;
-  end_date: string | null;
-};
+type BookingDoctor = BookingCalendarDoctor;
 
 const WEEK_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
 type WeekKey = (typeof WEEK_KEYS)[number];
@@ -561,9 +556,11 @@ useEffect(() => {
   useEffect(() => {
     if (!visitDate || !bookingDoctorId) return;
     if (!selectedBookingDoctor) return;
-    if (isDoctorAvailableOn(selectedBookingDoctor, visitDate)) return;
+    if (isDoctorAvailableOn(selectedBookingDoctor, visitDate)) {
+      setBookingNotice(null);
+      return;
+    }
 
-    setBookingDoctorId("");
     setBookingNotice("Selected doctor is not available on that day. Please choose another date or doctor.");
   }, [visitDate, bookingDoctorId, selectedBookingDoctor]);
 
@@ -1583,7 +1580,7 @@ instance.open();
                     className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-teal-200"
                   >
                     <option value="">Any doctor (optional)</option>
-                    {(visitDate ? availableBookingDoctors : bookingDoctors).map((d) => {
+                    {bookingDoctors.map((d) => {
                       const extra = visitDate ? timingForDay(d, visitDate) : "";
                       return (
                         <option key={d.id} value={d.id}>
@@ -1661,28 +1658,15 @@ instance.open();
               </form>
             </Card>
 
-            <div className="relative overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-lg">
-              <div className="relative aspect-[4/3] w-full">
-                <Image
-                  src={CLINIC.bookingImageUrl}
-                  alt="Clinic booking"
-                  fill
-                  sizes="(max-width: 768px) 90vw, 520px"
-                  className="object-cover"
-                />
-              </div>
-              <div className="space-y-3 p-5">
-                <div className="text-sm font-bold text-slate-900">Clinic hours</div>
-                <div className="grid gap-2">
-                  {CLINIC.hours.map((h) => (
-                    <div key={h.day} className="flex items-center justify-between rounded-xl bg-slate-50 px-4 py-3 text-sm">
-                      <span className="font-semibold text-slate-800">{h.day}</span>
-                      <span className="text-slate-600">{h.time}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
+            <BookingDoctorCalendar
+              key={`${selectedBookingDoctor?.id ?? "none"}:${visitDate ? visitDate.slice(0, 7) : "none"}`}
+              doctor={selectedBookingDoctor}
+              selectedDate={visitDate}
+              onSelectDate={(dateISO) => {
+                setVisitDate(dateISO);
+                setBookingNotice(null);
+              }}
+            />
           </div>
         </div>
       </section>
