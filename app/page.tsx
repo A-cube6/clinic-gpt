@@ -1099,14 +1099,7 @@ instance.open();
             desc="Owner-managed catalog (Supabase). Checkout creates a secure order record. Payments are still in Demo mode."
           />
 
-          <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-            <div className="font-semibold">Prototype notice</div>
-            <div className="mt-1 text-amber-800">
-              Checkout is enabled with a demo payment step so you can review the flow. Next step: wire Razorpay for real
-              transactions.
-            </div>
-          </div>
-
+          
           {/* Search + Sort */}
           <div className="mt-8">
             <div className="flex flex-col gap-3 md:flex-row md:items-center">
