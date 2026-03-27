@@ -60,6 +60,7 @@ type BookingRequestRow = {
   phone: string;
   service?: string | null;
   preferred_date?: string | null;
+  preferred_time?: string | null;
   doctor_id?: string | null;
   doctor?: DoctorJoin;
   note?: string | null;
@@ -863,7 +864,7 @@ export default function OwnerDashboardMasterDetail() {
 
     const { data, error } = await supabase
       .from("booking_requests")
-      .select("id, created_at, status, full_name, phone, service, preferred_date, doctor_id, note, doctor:doctors(name)")
+      .select("id, created_at, status, full_name, phone, service, preferred_date, preferred_time, doctor_id, note, doctor:doctors(name)")
       .order("created_at", { ascending: false })
       .limit(200);
 
@@ -1332,6 +1333,7 @@ function openPrintReport({
         "Patient",
         "Phone",
         "Preferred Date",
+        "Preferred Time",
         "Doctor",
         "Service",
         "Status",
@@ -1343,6 +1345,7 @@ function openPrintReport({
         Patient: b.full_name,
         Phone: b.phone,
         "Preferred Date": b.preferred_date ?? "—",
+        "Preferred Time": b.preferred_time ?? "—",
         Doctor: doctorNameFromJoin(b.doctor) || "Any",
         Service: b.service ?? "—",
         Status: b.status ?? "—",
@@ -1399,7 +1402,7 @@ function openPrintReport({
           .limit(50),
         supabase
           .from("booking_requests")
-          .select("id, created_at, status, full_name, phone, service, preferred_date, doctor_id, note, doctor:doctors(name)")
+          .select("id, created_at, status, full_name, phone, service, preferred_date, preferred_time, doctor_id, note, doctor:doctors(name)")
           .order("created_at", { ascending: false })
           .limit(200),
         supabase.from("clinic_finance_items").select("id, kind, title, amount_inr, note, created_at").order("created_at", { ascending: false }),
@@ -1575,8 +1578,8 @@ function openPrintReport({
       },
       {
         name: "BookingRequests",
-        headers: ["id", "created_at", "status", "full_name", "phone", "service", "preferred_date", "doctor_id", "doctor_name", "note"],
-        rows: snapshot.bookingReqs.map((r) => [r.id, r.created_at ?? "", r.status ?? "", r.full_name, r.phone, r.service ?? "", r.preferred_date ?? "", r.doctor_id ?? "", doctorNameFromJoin(r.doctor), r.note ?? ""]),
+        headers: ["id", "created_at", "status", "full_name", "phone", "service", "preferred_date", "preferred_time", "doctor_id", "doctor_name", "note"],
+        rows: snapshot.bookingReqs.map((r) => [r.id, r.created_at ?? "", r.status ?? "", r.full_name, r.phone, r.service ?? "", r.preferred_date ?? "", r.preferred_time ?? "", r.doctor_id ?? "", doctorNameFromJoin(r.doctor), r.note ?? ""]),
       },
       {
         name: "Finance",
@@ -3057,13 +3060,14 @@ downloadText(
               full_name: b.full_name ?? "",
               phone: b.phone ?? "",
               preferred_date: b.preferred_date ?? "",
+              preferred_time: b.preferred_time ?? "",
               doctor: doctorNameFromJoin(b.doctor),
               service: b.service ?? "",
               note: b.note ?? "",
             }));
             downloadText(
               "booking_requests.csv",
-              toCsv(rows, ["id", "created_at", "status", "full_name", "phone", "preferred_date", "doctor", "service", "note"])
+              toCsv(rows, ["id", "created_at", "status", "full_name", "phone", "preferred_date", "preferred_time", "doctor", "service", "note"])
             );
           }}
           onPrint={printBookingsReport}
@@ -3108,7 +3112,7 @@ downloadText(
           </div>
         </div>
 
-        <Table headers={["Created", "Patient", "Preferred date", "Doctor", "Service", "Status", "Actions"]}>
+        <Table headers={["Created", "Patient", "Preferred date", "Preferred time", "Doctor", "Service", "Status", "Actions"]}>
           {filteredBookingReqs.map((b) => (
             <tr key={b.id} className="border-t border-slate-200">
               <td className="px-4 py-3 text-slate-700">
@@ -3119,6 +3123,7 @@ downloadText(
                 <div className="text-xs text-slate-600">{b.phone}</div>
               </td>
               <td className="px-4 py-3 text-slate-700">{b.preferred_date ?? "—"}</td>
+              <td className="px-4 py-3 text-slate-700">{b.preferred_time ?? "—"}</td>
               <td className="px-4 py-3 text-slate-700">{doctorNameFromJoin(b.doctor) || "Any"}</td>
               <td className="px-4 py-3 text-slate-700">{b.service ?? "—"}</td>
               <td className="px-4 py-3">

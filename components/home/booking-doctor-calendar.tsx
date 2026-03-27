@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 
@@ -25,6 +25,7 @@ type BookingCalendarRow = {
 
 const WEEK_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
 const WEEK_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
+const subscribe = () => () => {};
 
 function startOfMonth(date: Date): Date {
   return new Date(date.getFullYear(), date.getMonth(), 1);
@@ -99,15 +100,23 @@ function weekRange(date: Date): Date[] {
 
 export default function BookingDoctorCalendar({ doctor, selectedDate, onSelectDate }: Props) {
   const supabase = useMemo(() => createSupabaseBrowserClient(), []);
-  const [visibleDate, setVisibleDate] = useState<Date>(() => (selectedDate ? dateFromISO(selectedDate) : new Date()));
+  const [visibleDate, setVisibleDate] = useState<Date | null>(null);
   const [bookingsByDate, setBookingsByDate] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const hydrated = useSyncExternalStore(subscribe, () => true, () => false);
+
+  const effectiveVisibleDate = useMemo(() => {
+    if (visibleDate) return visibleDate;
+    if (selectedDate) return dateFromISO(selectedDate);
+    if (!hydrated) return null;
+    return new Date();
+  }, [hydrated, selectedDate, visibleDate]);
 
   useEffect(() => {
-    if (!doctor) return;
+    if (!doctor || !effectiveVisibleDate) return;
 
-    const visibleMonth = startOfMonth(visibleDate);
+    const visibleMonth = startOfMonth(effectiveVisibleDate);
     const rangeStart = startOfMonth(addMonths(visibleMonth, -1));
     const rangeEnd = endOfMonth(addMonths(visibleMonth, 2));
 
@@ -145,13 +154,14 @@ export default function BookingDoctorCalendar({ doctor, selectedDate, onSelectDa
     return () => {
       cancelled = true;
     };
-  }, [doctor, supabase, visibleDate]);
+  }, [doctor, effectiveVisibleDate, supabase]);
 
-  const visibleMonth = useMemo(() => startOfMonth(visibleDate), [visibleDate]);
-  const days = useMemo(() => monthGrid(visibleMonth), [visibleMonth]);
-  const weekDays = useMemo(() => weekRange(visibleDate), [visibleDate]);
-  const monthLabel = visibleMonth.toLocaleDateString("en-IN", { month: "long", year: "numeric" });
+  const visibleMonth = useMemo(() => (effectiveVisibleDate ? startOfMonth(effectiveVisibleDate) : null), [effectiveVisibleDate]);
+  const days = useMemo(() => (visibleMonth ? monthGrid(visibleMonth) : []), [visibleMonth]);
+  const weekDays = useMemo(() => (effectiveVisibleDate ? weekRange(effectiveVisibleDate) : []), [effectiveVisibleDate]);
+  const monthLabel = visibleMonth?.toLocaleDateString("en-IN", { month: "long", year: "numeric" }) ?? "Loading calendar";
   const weekLabel = useMemo(() => {
+    if (weekDays.length !== 7) return "Loading week";
     const first = weekDays[0];
     const last = weekDays[6];
     const sameMonth = first.getMonth() === last.getMonth() && first.getFullYear() === last.getFullYear();
@@ -169,6 +179,21 @@ export default function BookingDoctorCalendar({ doctor, selectedDate, onSelectDa
       <div className="rounded-[2rem] border border-dashed border-slate-300 bg-slate-50 p-6">
         <div className="text-sm font-semibold text-slate-900">Doctor calendar</div>
         <p className="mt-2 text-sm text-slate-600">Select a doctor to view their current weekly availability and confirmed booking days.</p>
+      </div>
+    );
+  }
+
+  if (!effectiveVisibleDate || !visibleMonth) {
+    return (
+      <div className="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <div className="text-sm font-semibold uppercase tracking-[0.18em] text-teal-700">Doctor calendar</div>
+            <div className="mt-1 text-xl font-bold text-slate-900">{doctor.name}</div>
+            <p className="mt-1 text-sm text-slate-600">Preparing the latest availability view.</p>
+          </div>
+        </div>
+        <div className="mt-5 h-48 rounded-[2rem] border border-slate-200 bg-slate-50" />
       </div>
     );
   }

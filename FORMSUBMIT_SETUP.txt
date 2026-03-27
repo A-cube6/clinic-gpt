@@ -1,0 +1,19 @@
+FormSubmit booking notification setup
+
+Added:
+- app/api/booking-notify/route.ts
+- booking submit hook inside app/page.tsx after successful Supabase insert
+
+Environment variables (set in Vercel / local .env):
+- FORMSUBMIT_ENDPOINT=https://formsubmit.co/ajax/<your-hidden-formsubmit-endpoint>
+  OR
+- FORMSUBMIT_EMAIL=you@example.com
+
+Optional:
+- FORMSUBMIT_SUBJECT=New booking request - Smile & Care Dental Clinic
+- FORMSUBMIT_CC=another@example.com
+
+Recommended:
+1. Use FORMSUBMIT_ENDPOINT instead of a raw email address if you have the hidden/random FormSubmit endpoint.
+2. Submit one test booking after deploy and confirm the FormSubmit target if FormSubmit asks for first-time confirmation.
+3. The website booking remains successful even if the email notification fails; check server logs if emails do not arrive.

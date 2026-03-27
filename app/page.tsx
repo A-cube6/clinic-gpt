@@ -66,6 +66,7 @@ const THEME = {
 } as const;
 
 const APP_BUILD_VERSION = process.env.NEXT_PUBLIC_BUILD_VERSION || "unknown";
+const COPYRIGHT_YEAR = APP_BUILD_TIME.slice(0, 4);
 
 function cn(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");
@@ -357,6 +358,7 @@ export default function Page() {
 
   // --- Booking form state ---
   const [visitDate, setVisitDate] = useState<string>("");
+  const [visitTime, setVisitTime] = useState<string>("");
   const [bookingDoctorId, setBookingDoctorId] = useState<string>("");
   const [bookingDoctors, setBookingDoctors] = useState<BookingDoctor[]>([]);
   const [bookingDoctorsError, setBookingDoctorsError] = useState<string | null>(null);
@@ -1458,6 +1460,7 @@ instance.open();
 <form
   onSubmit={async (e) => {
     e.preventDefault();
+    const form = e.currentTarget as HTMLFormElement;
     setBookingSubmitting(true);
     setBookingResult(null);
     setBookingNotice(null);
@@ -1472,12 +1475,14 @@ instance.open();
         return;
       }
 
-      const fd = new FormData(e.currentTarget);
+      const fd = new FormData(form);
       const fullName = String(fd.get("full_name") ?? "").trim();
       const phone = String(fd.get("phone") ?? "").trim();
       const service = String(fd.get("service") ?? "").trim();
       const date = String(fd.get("visit_date") ?? "").trim();
+      const time = String(fd.get("visit_time") ?? "").trim();
       const doctorId = String(fd.get("doctor_id") ?? "").trim();
+      const selectedDoctor = bookingDoctors.find((d) => d.id === doctorId) ?? null;
 
       if (!fullName) {
         setBookingResult({ ok: false, message: "Please enter your full name." });
@@ -1493,6 +1498,7 @@ instance.open();
         phone,
         service: service || null,
         preferred_date: date || null,
+        preferred_time: time || null,
         doctor_id: doctorId || null,
         status: "new",
         source: "web",
@@ -1507,14 +1513,90 @@ instance.open();
         return;
       }
 
+      let notifyWarning: string | null = null;
+      try {
+        const formsubmitEmail = process.env.NEXT_PUBLIC_FORMSUBMIT_EMAIL?.trim();
+        const formsubmitCc = process.env.NEXT_PUBLIC_FORMSUBMIT_CC?.trim();
+        const formsubmitSubject =
+          process.env.NEXT_PUBLIC_FORMSUBMIT_SUBJECT?.trim() ||
+          "New booking request from Smile & Care";
+
+        if (!formsubmitEmail) {
+          throw new Error("Missing NEXT_PUBLIC_FORMSUBMIT_EMAIL");
+        }
+
+        const formsubmitEndpoint = `https://formsubmit.co/ajax/${encodeURIComponent(formsubmitEmail)}`;
+        const formsubmitData = new URLSearchParams();
+        formsubmitData.append("name", fullName);
+        formsubmitData.append("phone", phone);
+        formsubmitData.append("service", service || "");
+        formsubmitData.append("preferred_date", date || "");
+        formsubmitData.append("preferred_time", time || "");
+        formsubmitData.append("doctor_id", doctorId || "");
+        formsubmitData.append("doctor_name", selectedDoctor?.name || "");
+        formsubmitData.append(
+          "message",
+          [
+            "A new booking request has been submitted.",
+            `Name: ${fullName}`,
+            `Phone: ${phone || "—"}`,
+            `Service: ${service || "—"}`,
+            `Preferred date: ${date || "—"}`,
+            `Preferred time: ${time || "—"}`,
+            `Doctor ID: ${doctorId || "—"}`,
+            `Doctor name: ${selectedDoctor?.name || "Any doctor"}`,
+          ].join("\n")
+        );
+        formsubmitData.append("_subject", formsubmitSubject);
+        formsubmitData.append("_template", "table");
+        formsubmitData.append("_url", window.location.href);
+        if (formsubmitCc) {
+          formsubmitData.append("_cc", formsubmitCc);
+        }
+
+        const notifyResponse = await fetch(formsubmitEndpoint, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
+            Accept: "application/json",
+          },
+          body: formsubmitData.toString(),
+          referrerPolicy: "origin-when-cross-origin",
+        });
+
+        const notifyText = await notifyResponse.text();
+        let notifyJson: any = notifyText;
+        try {
+          notifyJson = JSON.parse(notifyText);
+        } catch {
+          // keep raw text if upstream doesn't return JSON
+        }
+
+        const notifySucceeded =
+          notifyResponse.ok &&
+          (notifyJson?.success === true || notifyJson?.success === "true");
+
+        if (!notifySucceeded) {
+          console.error("FormSubmit client notify failed", notifyResponse.status, notifyJson);
+          notifyWarning = "Booking saved, but email notification could not be sent.";
+        }
+      } catch (notifyError) {
+        console.error("FormSubmit client notify failed", notifyError);
+        notifyWarning = "Booking saved, but email notification could not be sent.";
+      }
+
       setBookingResult({
         ok: true,
         message: "Request received. Reception will call you to confirm.",
       });
+      if (notifyWarning) {
+        setBookingNotice(notifyWarning);
+      }
 
       // Reset form fields
-      (e.currentTarget as HTMLFormElement).reset();
+      form.reset();
       setVisitDate("");
+      setVisitTime("");
       setBookingDoctorId("");
     } finally {
       setBookingSubmitting(false);
@@ -1554,8 +1636,22 @@ instance.open();
                     }}
                     className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-teal-200"
                   />
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-slate-700">Preferred visit time</label>
+                  <input
+                    name="visit_time"
+                    type="time"
+                    value={visitTime}
+                    onChange={(e) => {
+                      setVisitTime(e.target.value);
+                      setBookingNotice(null);
+                    }}
+                    className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-teal-200"
+                  />
                   <p className="mt-1 text-xs text-slate-500">
-                    Reception will call back to confirm the exact time.
+                    Requested time only. Reception will call back to confirm the final slot.
                   </p>
                 </div>
 
@@ -1748,7 +1844,7 @@ instance.open();
           </div>
           <div className="mt-8 text-xs text-slate-500">
             <p className="text-sm text-slate-500">
-              © {new Date().getFullYear()} {CLINIC.name}. Created by{" "}
+              © {COPYRIGHT_YEAR} {CLINIC.name}. Created by{" "}
               <a
                 href="https://acubemanagement.com/"
                 target="_blank"

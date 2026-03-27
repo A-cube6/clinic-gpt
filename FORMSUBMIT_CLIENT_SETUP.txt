@@ -1,0 +1,16 @@
+Use these public environment variables for the booking email alert:
+
+Local .env.local
+NEXT_PUBLIC_FORMSUBMIT_EMAIL=your-email@example.com
+NEXT_PUBLIC_FORMSUBMIT_CC=cc-email@example.com
+NEXT_PUBLIC_FORMSUBMIT_SUBJECT=New booking request from Smile & Care
+
+Vercel project settings
+NEXT_PUBLIC_FORMSUBMIT_EMAIL=your-email@example.com
+NEXT_PUBLIC_FORMSUBMIT_CC=cc-email@example.com
+NEXT_PUBLIC_FORMSUBMIT_SUBJECT=New booking request from Smile & Care
+
+Notes:
+- This version sends the FormSubmit request directly from the browser after the Supabase insert succeeds.
+- The existing Supabase booking insert remains unchanged.
+- The old /api/booking-notify route can remain in the codebase, but app/page.tsx no longer depends on it.
