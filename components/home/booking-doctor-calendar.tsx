@@ -212,7 +212,7 @@ export default function BookingDoctorCalendar({ doctor, selectedDate, onSelectDa
       <div className="mt-5 flex items-center justify-between md:hidden">
         <button
           type="button"
-          onClick={() => setVisibleDate((prev) => addDays(prev, -7))}
+          onClick={() => setVisibleDate((prev) => addDays(prev ?? effectiveVisibleDate ?? new Date(), -7))}
           className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
           aria-label="Previous week"
         >
@@ -224,7 +224,7 @@ export default function BookingDoctorCalendar({ doctor, selectedDate, onSelectDa
         </div>
         <button
           type="button"
-          onClick={() => setVisibleDate((prev) => addDays(prev, 7))}
+          onClick={() => setVisibleDate((prev) => addDays(prev ?? effectiveVisibleDate ?? new Date(), 7))}
           className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
           aria-label="Next week"
         >
@@ -283,7 +283,7 @@ export default function BookingDoctorCalendar({ doctor, selectedDate, onSelectDa
       <div className="mt-5 hidden items-center justify-between md:flex">
         <button
           type="button"
-          onClick={() => setVisibleDate((prev) => addMonths(prev, -1))}
+          onClick={() => setVisibleDate((prev) => addMonths(prev ?? effectiveVisibleDate ?? new Date(), -1))}
           className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
           aria-label="Previous month"
         >
@@ -292,7 +292,7 @@ export default function BookingDoctorCalendar({ doctor, selectedDate, onSelectDa
         <div className="text-sm font-semibold text-slate-900">{monthLabel}</div>
         <button
           type="button"
-          onClick={() => setVisibleDate((prev) => addMonths(prev, 1))}
+          onClick={() => setVisibleDate((prev) => addMonths(prev ?? effectiveVisibleDate ?? new Date(), 1))}
           className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
           aria-label="Next month"
         >
